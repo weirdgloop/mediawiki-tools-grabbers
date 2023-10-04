@@ -13,7 +13,9 @@
 
 use MediaWiki\CommentStore\CommentStore;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Page\PageStore;
 use MediaWiki\User\ActorStore;
+use MediaWiki\User\UserFactory;
 use MediaWiki\User\UserIdentity;
 use MediaWiki\User\UserIdentityValue;
 use MediaWiki\User\UserNameUtils;
@@ -34,6 +36,10 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	protected ActorStore $actorStore;
 
 	protected CommentStore $commentStore;
+
+	protected PageStore $pageStore;
+
+	protected UserFactory $userFactory;
 
 	protected UserNameUtils $userNameUtils;
 
@@ -65,15 +71,15 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$user = $this->getOption( 'username' );
 		$password = $this->getOption( 'password' );
 
-		# bot class and log in if requested
+		# Initialise MediaWikiBot class
+		$this->bot = new MediaWikiBot(
+			$url,
+			'json',
+			$user ?? '',
+			$password ?? '',
+			'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:13.0) Gecko/20100101 Firefox/13.0.1'
+		);
 		if ( $user && $password ) {
-			$this->bot = new MediaWikiBot(
-				$url,
-				'json',
-				$user,
-				$password,
-				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
-			);
 			$error = $this->bot->login();
 			if ( !$error ) {
 				$this->output( "Logged in as $user...\n" );
@@ -81,20 +87,14 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$this->fatalError( sprintf( "Failed to log in as %s: %s",
 					$user, $error['login']['reason'] ) );
 			}
-		} else {
-			$this->bot = new MediaWikiBot(
-				$url,
-				'json',
-				'',
-				'',
-				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'
-			);
 		}
 
 		# Get a single DB_PRIMARY connection
 		$this->dbw = $this->getDB( DB_PRIMARY, [], $this->getOption( 'db', $wgDBname ) );
 
 		$services = MediaWikiServices::getInstance();
+		$this->userFactory = $services->getUserFactory();
+		$this->pageStore = $services->getPageStore();
 		$this->actorStore = $services->getActorStore();
 		$this->commentStore = $services->getCommentStore();
 		$this->userNameUtils = $services->getUserNameUtils();
@@ -107,16 +107,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * @param string $title Title of the page without the namespace
 	 */
 	function getPageID( $ns, $title ) {
-		$pageID = (int)$this->dbw->selectField(
-			'page',
-			'page_id',
-			[
-				'page_namespace' => $ns,
-				'page_title' => $title,
-			],
-			__METHOD__
-		);
-		return $pageID;
+		$page = $this->pageStore->getPageByName( $ns, $title );
+		return $page ? $page->getId() : null;
 	}
 
 	/**
@@ -158,7 +150,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$oldname = $userIdentity->getName();
 				# Cache the new user name for uncompleted user rename.
 				$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
-				$this->output( "Notice: We encountered an user rename on ID $id, $oldname => $name\n" );
+				$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
 			} elseif ( $userIdentity ) {
 				return $userIdentity;
 			}
@@ -177,9 +169,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * @param UserIdentity $user
 	 * @return string The new user name
 	 */
-	private function getAndUpdateUserName( UserIdentity $user ) {
-		$oldname = $user->getName();
-		$userid = $user->getId();
+	private function getAndUpdateUserName( UserIdentity $userIdentity ) {
+		$userid = $userIdentity->getId();
 		$params = [
 			'list' => 'users',
 			'ususerids' => $userid,
@@ -189,37 +180,19 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			$this->fatalError( "User ID $userid not found, is that a suppressed user now?" );
 		}
 
-		# Clear all related cache
-		MediaWikiServices::getInstance()->getUserFactory()->newFromUserIdentity( $user )->invalidateCache();
-		$this->actorStore->deleteUserIdentityFromCache( $user );
-
 		$newname = $result['query']['users'][0]['name'];
+		$user = $this->userFactory->newFromUserIdentity( $userIdentity );
+		$conflictingUser = $this->userFactory->newFromName( $newname );
 
-		$conflictingid = (int)$this->dbw->selectField(
-			'user',
-			'user_id',
-			[
-				'user_name' => $newname,
-			],
-			__METHOD__
-		);
-		if ( $conflictingid && $conflictingid !== $userid ) {
-			$this->output( "Notice: User name $newname is already in use by ID $conflictingid, keeping user name $oldname for $userid\n" );
+		if ( $conflictingUser && $conflictingUser->isRegistered() && $conflictingUser->getId() !== $user->getId() ) {
+			$oldname = $this->getName();
+			$this->output( "Notice: User name $newname is already in use by ID {$conflictingUser->getId()}, keeping user name $oldname for $userid\n" );
 			return $oldname;
 		}
-		# Adapt from RenameuserSQL::rename(), do we need other parts?
-		$this->dbw->update(
-			'user',
-			[ 'user_name' => $newname, 'user_touched' => $this->dbw->timestamp() ],
-			[ 'user_id' => $userid ],
-			__METHOD__
-		);
-		$this->dbw->update(
-			'actor',
-			[ 'actor_name' => $newname ],
-			[ 'actor_user' => $userid ],
-			__METHOD__
-		);
+
+		# Update the user's name
+		$user->setName( $newname );
+		$user->saveSettings();
 
 		return $newname;
 	}
@@ -232,7 +205,6 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 */
 	function getActorFromUser( $id, $name ) {
 		$user = $this->getUserIdentity( $id, $name );
-
 		return $this->actorStore->acquireActorId( $user, $this->dbw );
 	}
 
