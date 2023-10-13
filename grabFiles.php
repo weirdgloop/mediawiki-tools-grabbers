@@ -110,13 +110,19 @@ class GrabFiles extends FileGrabber {
 				continue;
 			}
 
+			// Skip current file revision.
+			if ( !isset( $fileVersion['archivename'] ) ) {
+				$this->output( "Skipping current file version...\n" );
+				continue;
+			}
+
 			# Api returns file revisions from new to old.
 			# WARNING: If a new version of a file is uploaded after the start of the script
 			# (or endDate), the file and all its previous revisions would be skipped,
 			# potentially leaving pages that were using the old image with redlinks.
 			# To prevent this, we'll skip only more recent versions, and mark the first
 			# one before the end date as the latest
-			if ( !$count && wfTimestamp( TS_MW, $fileVersion['timestamp'] ) > $this->endDate ) {
+			if ( wfTimestamp( TS_MW, $fileVersion['timestamp'] ) > $this->endDate ) {
 				#return 0;
 				continue;
 			}
@@ -127,11 +133,8 @@ class GrabFiles extends FileGrabber {
 				return 0;
 			}
 
-			if ( $count > 0 ) {
-				$status = $this->oldUpload( $name, $fileVersion );
-			} else {
-				$status = $this->newUpload( $name, $fileVersion );
-			}
+			// Only uploading old file revisions.
+			$status = $this->oldUpload( $name, $fileVersion );
 
 			if ( $status->isOK() ) {
 				$count++;
