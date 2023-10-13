@@ -227,7 +227,21 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'oi_major_mime' => $file_e['major_mime'],
 			'oi_minor_mime' => $file_e['minor_mime']
 		] + $commentFields;
-		$this->dbw->insert( 'oldimage', $e, __METHOD__ );
+
+		$historyExists = $this->dbw->selectField(
+			'oldimage',
+			'1',
+			[
+				'oi_name' => $e['oi_name'],
+				'oi_archive_name' => $e['oi_archive_name'],
+				'oi_timestamp' => $e['oi_timestamp'],
+			],
+			__METHOD__
+		);
+
+		if ( !$historyExists ) {
+			$this->dbw->insert( 'oldimage', $e, __METHOD__ );
+		}
 		$status = $this->storeFileFromURL( $name, $fileurl, $file_e['timestamp'], $mime, $file_e['sha1'], $fileVersion['archivename'] );
 		$this->output( "Done\n" );
 		return $status;
