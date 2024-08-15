@@ -17,25 +17,11 @@ require_once 'ExternalWikiGrabber.php';
 abstract class FileGrabber extends ExternalWikiGrabber {
 
 	/**
-	 * End date
-	 *
-	 * @var string
-	 */
-	protected $endDate;
-
-	/**
 	 * Local file repository
 	 *
 	 * @var LocalRepo
 	 */
 	protected $localRepo;
-
-	/**
-	 * Temporal file handle
-	 *
-	 * @var FileHandle
-	 */
-	protected $mTmpHandle;
 
 	/**
 	 * Mime type analyzer
@@ -136,7 +122,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'img_minor_mime' => $file_e['minor_mime']
 		] + $commentFields;
 		$this->dbw->insert( 'image', $e, __METHOD__ );
-		$status = $this->storeFileFromURL( $name, $fileurl, false, $file_e['sha1'] );
+		$status = $this->storeFileFromURL( $name, $fileurl, false, $fileVersion['sha1'] );
 
 		// Refresh image metadata
 		if ( $status->isOK() ) {
@@ -256,7 +242,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$this->dbw->insert( 'oldimage', $e, __METHOD__ );
 		}
 
-		$status = $this->storeFileFromURL( $name, $fileurl, $file_e['timestamp'], $file_e['sha1'], $fileVersion['archivename'] );
+		$status = $this->storeFileFromURL( $name, $fileurl, $file_e['timestamp'], $fileVersion['sha1'], $fileVersion['archivename'] );
 
 		// Refresh image metadata
 		if ( $status->isOK() ) {
@@ -339,23 +325,19 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 * @return Status status of the operation
 	 */
 	function downloadFile( $fileurl, $targetTempFile, $relatedFileName, $sha1 = null ) {
-		$this->mTmpHandle = fopen( $targetTempFile, 'wb' );
-		if (!$this->mTmpHandle) {
-			$status = Status::newFatal( 'CANTCREATEFILE' ); # Not an existing message but whatever
-			return $status;
-		}
+		// The request class since 1.33 based on Guzzle supports the sink option.
 		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()
-			->create( $fileurl, [ 'timeout' => 90 ], __METHOD__ );
-		$req->setCallback( [ $this, 'saveTempFileChunk' ] );
+			->create( $fileurl, [
+				'timeout' => 90,
+				'sink' => $targetTempFile,
+			], __METHOD__ );
 		$this->setRelevantAcceptHeader( $req, $relatedFileName );
 		$status = $req->execute();
-		fclose( $this->mTmpHandle );
 		if ( $status->isOK() ) {
 			if ( is_null( $sha1 ) ) {
 				return $status;
 			}
-			# Check sha1
-			$storedSha1 = Wikimedia\base_convert( sha1_file( $targetTempFile ), 16, 36, 31 );
+			$storedSha1 = sha1_file( $targetTempFile );
 			if ( $storedSha1 == $sha1 ) {
 				return $status;
 			}
@@ -367,28 +349,6 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				$fileurl, $status->getWikiText() ) );
 		}
 		return $status;
-	}
-
-	/**
-	 * Callback: save a chunk of the result of a HTTP request to the temporary file
-	 * Copied from UploadFromUrl
-	 *
-	 * @param mixed $req
-	 * @param string $buffer
-	 * @return int Number of bytes handled
-	 */
-	function saveTempFileChunk( $req, $buffer ) {
-		$nbytes = fwrite( $this->mTmpHandle, $buffer );
-
-		if ( $nbytes != strlen( $buffer ) ) {
-			// Well... that's not good!
-			$this->output( sprintf( " Short write %s/%s bytes, aborting.\n",
-				$nbytes, strlen( $buffer ) ), 1 );
-			fclose( $this->mTmpHandle );
-			$this->mTmpHandle = false;
-		}
-
-		return $nbytes;
 	}
 
 	/**
@@ -431,6 +391,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		if ( $this->isWikia &&
 			isset( $fileVersion['mime'] ) &&
 			$fileVersion['mime'] == 'video/youtube' &&
+			isset( $fileVersion['mediatype'] ) &&
 			strtoupper( $fileVersion['mediatype'] ) == 'VIDEO'
 		) {
 			return true;

@@ -18,8 +18,10 @@ class GrabImages extends FileGrabber {
 
 	public function __construct() {
 		parent::__construct();
-		$this->mDescription = 'Get images from an external wiki and save them to our disk. ' .
-			'This script does not import them to the wiki. If you want files to be imported, use grabFiles instead.';
+		$this->addDescription(
+			'Get images from an external wiki and save them to our disk. ' .
+			'This script does not import them to the wiki. If you want files to be imported, use grabFiles instead.'
+		);
 		$this->addOption( 'folder', 'Folder to save images to', true /* required? */, true /* withArg */ );
 		$this->addOption( 'from', 'Name of file to start from', false /* required? */, true /* withArg */ );
 	}
@@ -103,18 +105,14 @@ class GrabImages extends FileGrabber {
 			}
 
 			$url = $this->sanitiseUrl( $fileVersion['url'] );
-			$sha1 = Wikimedia\base_convert( $fileVersion['sha1'], 16, 36, 31 );
 			$path = "$folder/$name";
 
-			if ( file_exists( $path ) ) {
-				$storedSha1 = Wikimedia\base_convert( sha1_file( $path ), 16, 36, 31 );
-				if ( $storedSha1 == $sha1 ) {
-					$this->output( "File {$name} already exists. SKIPPED\n" );
-					return $count;
-				}
+			if ( file_exists( $path ) && sha1_file( $path ) == $fileVersion['sha1'] ) {
+				$this->output( "File {$name} already exists. SKIPPED\n" );
+				return $count;
 			}
 
-			$status = $this->downloadFile( $url, $path, $name, $sha1 );
+			$status = $this->downloadFile( $url, $path, $name, $fileVersion['sha1'] );
 
 			if ( $status->isOK() ) {
 				$count++;

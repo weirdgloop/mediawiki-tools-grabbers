@@ -66,7 +66,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 
 		$user = $this->getOption( 'username' );
 		$password = $this->getOption( 'password' );
-		$useragent = $this->getOption( 'useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36' );
+		$useragent = $this->getOption( 'useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' );
 		$fandomAppId = $this->getOption( 'fandom-app-id', '1234' );
 
 		# bot class and log in if requested

@@ -31,7 +31,7 @@ class GrabLogs extends ExternalWikiGrabber {
 
 	public function __construct() {
 		parent::__construct();
-		$this->mDescription = 'Grabs logs from a pre-existing wiki into a new wiki.';
+		$this->addDescription( 'Grabs logs from a pre-existing wiki into a new wiki.' );
 		$this->addOption( 'start', 'Start point (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
 		$this->addOption( 'end', 'Log time at which to stop (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
 		$this->addOption( 'logtypes', 'Process only logs of those types (pipe separated list). All logs will be processed by default', false, true );

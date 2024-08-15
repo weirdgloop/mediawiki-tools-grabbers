@@ -15,19 +15,9 @@ require_once 'includes/FileGrabber.php';
 
 class GrabNewFiles extends FileGrabber {
 
-	/**
-	 * Start date
-	 *
-	 * @var MWTimestamp
-	 */
-	protected $startDate;
+	protected ?string $startDate;
 
-	/**
-	 * End date
-	 *
-	 * @var MWTimestamp
-	 */
-	protected $endDate;
+	protected ?string $endDate;
 
 	/**
 	 * A list of page titles of images that have uploads pending
@@ -46,7 +36,9 @@ class GrabNewFiles extends FileGrabber {
 
 	public function __construct() {
 		parent::__construct();
-		$this->mDescription = "Grabs updates to files from an external wiki\nFor use when files have been imported already and want to keep track of new uploads.";
+		$this->addDescription(
+			"Grabs updates to files from an external wiki\nFor use when files have been imported already and want to keep track of new uploads."
+		);
 		$this->addOption( 'startdate', 'Start point (20121222142317, 2012-12-22T14:23:17Z, etc); note that this cannot go back further than 1-3 months on most projects. If a start date is not provided, the last image timestamp in the database is used.', false /* required? */, true /* withArg */ );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc); note that the process may fail to process existing files that have been moved after this date', false, true );
 	}
