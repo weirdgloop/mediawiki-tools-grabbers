@@ -29,6 +29,7 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 		$this->addDescription( 'Grabs page restrictions from a pre-existing wiki into a new wiki.' );
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
 		$this->addOption( 'truncate', 'Delete existing page restrictions from the new wiki.', false, false );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -102,6 +103,12 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 			}
 
 			foreach ( $result['query']['pages'] as $page ) {
+				if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $page['title'] ) ) {
+					// Fandom's comment system creates a new page for each comment, which is terrible.
+					$this->output( "Skipped page \"${$page['title']}\": Fandom comment page.\n" );
+					continue;
+				}
+
 				$this->processPage( $page );
 				$this->pageCount++;
 			}

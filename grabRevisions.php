@@ -22,6 +22,7 @@ class GrabRevisions extends TextGrabber {
 		$this->addOption( 'new-revisions', 'Resume from the latest revision\'s timestamp.' );
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
 		$this->addOption( 'refreshlinks', 'Create refreshLinks jobs for changed pages.' );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -233,10 +234,16 @@ class GrabRevisions extends TextGrabber {
 			$result = $this->bot->query( $params );
 
 			$pages = $result['query']['allrevisions'];
-			// Deal with misser mode
+			// Deal with miser mode
 			if ( $pages ) {
 				$misserModeCount = $resultsCount = 0;
 				foreach ( $pages as $pageInfo ) {
+					if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $pageInfo['title'] ) ) {
+						// Fandom's comment system creates a new page for each comment, which is terrible.
+						$this->output( "Skipped page \"${pageInfo['title']}\": Fandom comment page.\n" );
+						continue;
+					}
+
 					$pageDBKey = $this->sanitiseTitle( $pageInfo['ns'], $pageInfo['title'] );
 					$pageIdent = PageIdentityValue::localIdentity(
 						$pageInfo['pageid'], $pageInfo['ns'], $pageDBKey

@@ -33,6 +33,7 @@ class GrabDeletedText extends TextGrabber {
 		#$this->addOption( 'startdate', 'Not yet implemented.', false, true );
 		$this->addOption( 'adrcontinue', 'API continue to restart deleted revision process', false, true );
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -124,7 +125,7 @@ class GrabDeletedText extends TextGrabber {
 				}
 				$result = $this->bot->query( $params );
 				if ( $result && isset( $result['error'] ) ) {
-					$this->fatalError( "$user does not have required rights to fetch deleted revisions." );
+					$this->fatalError( "User does not have required rights to fetch deleted revisions." );
 				}
 				if ( empty( $result ) ) {
 					sleep( .5 );
@@ -139,6 +140,12 @@ class GrabDeletedText extends TextGrabber {
 				}
 
 				foreach ( $pageChunks as $pageChunk ) {
+					if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $pageChunk['title'] ) ) {
+						// Fandom's comment system creates a new page for each comment, which is terrible.
+						$this->output( "Skipped page \"${pageChunk['title']}\": Fandom comment page.\n" );
+						continue;
+					}
+
 					$nsRevisions = $this->processDeletedRevisions( $pageChunk, $nsRevisions );
 				}
 

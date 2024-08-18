@@ -70,6 +70,7 @@ class GrabNewText extends TextGrabber {
 		$this->addOption( 'startdate', 'Start point (20121222142317, 2012-12-22T14:23:17Z, etc); note that this cannot go back further than 1-3 months on most projects. If a start date is not provided, the last revision timestamp in the database is used.', false, true );
 		$this->addOption( 'namespaces', 'A pipe-separated list of namespaces (ID) to grab changes from. Defaults to all namespaces', false, true );
 		$this->addOption( 'refreshlinks', 'Create refreshLinks jobs for changed pages.' );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -171,6 +172,13 @@ class GrabNewText extends TextGrabber {
 				}
 
 				$title = $entry['title'];
+
+				if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $title ) ) {
+					// Fandom's comment system creates a new page for each comment, which is terrible.
+					$this->output( "Skipped page \"$title\": Fandom comment page.\n" );
+					continue;
+				}
+
 				$ns = $entry['ns'];
 				$title = $this->sanitiseTitle( $ns, $title );
 

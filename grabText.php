@@ -25,6 +25,7 @@ class GrabText extends TextGrabber {
 		);
 		$this->addOption( 'start', 'Page at which to start, useful if the script stopped at this point', false, true );
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -130,7 +131,13 @@ class GrabText extends TextGrabber {
 
 				$resultsCount = 0;
 				foreach ( $pages as $page ) {
-					$this->processPage( $page );
+					if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $page['title'] ) ) {
+						// Fandom's comment system creates a new page for each comment, which is terrible.
+						$this->output( "Skipped page \"${page['title']}\": Fandom comment page.\n" );
+					} else {
+						$this->processPage( $page );
+					}
+
 					$doneCount++;
 					if ( $doneCount % 500 === 0 ) {
 						$this->output( "$doneCount\n" );
