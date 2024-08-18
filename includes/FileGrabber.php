@@ -40,6 +40,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	public function __construct() {
 		parent::__construct();
 		$this->addOption( 'wikia', 'Set this param if the target wiki is on Wikia/Fandom, which needs to handle URLs in a special way', false, false );
+		$this->addOption( 'ignore-sha', 'Ignore SHA-1 checksum mismatches. May be required for CDN hosts that do image optimisations.' );
 	}
 
 	public function execute() {
@@ -67,7 +68,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			# If the file is supressed and we don't have permissions,
 			# we won't get URL nor MIME.
 			# Skip the file revision instead of crashing
-			$this->output( "File supressed, skipping it\n" );
+			$this->output( "File suppressed, skipping it\n" );
 			$status = Status::newFatal( 'SKIPPED' ); # Not an existing message but whatever
 			return $status;
 		}
@@ -121,7 +122,22 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'img_major_mime' => $file_e['major_mime'],
 			'img_minor_mime' => $file_e['minor_mime']
 		] + $commentFields;
-		$this->dbw->insert( 'image', $e, __METHOD__ );
+
+		$rowExists = $this->dbw->selectField(
+			'image',
+			'img_name',
+			[
+				'img_name' => $name,
+			],
+			__METHOD__
+		);
+
+		if ( !$rowExists ) {
+			$this->dbw->insert( 'image', $e, __METHOD__ );
+		} else {
+			$this->output( "already exists in image table..." );
+		}
+
 		$status = $this->storeFileFromURL( $name, $fileurl, false, $fileVersion['sha1'] );
 
 		// Refresh image metadata
@@ -285,19 +301,19 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$maxRetries = 3; # Just an arbitrary value
 		$status = Status::newFatal( 'UNKNOWN' );
 		$tmpPath = tempnam( wfTempDir(), 'grabfile' );
-		$targeturl = $fileurl;
+
+		# Add a cache buster to get the latest version of a file. Fandom uses 'cb' already so we'll use 'purge'.
+		$time = time();
+		if ( strpos( $fileurl, '?' ) !== false ) {
+			$targeturl = "{$fileurl}&purge=$time";
+		} else {
+			$targeturl = "{$fileurl}?purge=$time";
+		}
+
 		# Retry in case of download failure
 		for ( $retries = 0; !$status->isOK() && $retries < $maxRetries; $retries++ ) {
 			if ( $retries > 0 ) {
-				# Maybe sha1 didn't match because an old version of the file
-				# is cached on the server. Try to append a random parameter
-				# to the URL to trick the server to get a fresh version
-				if ( strpos( $fileurl, '?' ) !== false ) {
-					$targeturl = "{$fileurl}&purge={$retries}";
-				} else {
-					$targeturl = "{$fileurl}?purge={$retries}";
-				}
-				# Also wait some time in case the server is temporarily unavailable
+				# Wait some time in case the server is temporarily unavailable
 				sleep( 5 * $retries );
 			}
 			$status = $this->downloadFile( $targeturl, $tmpPath, $name, $sha1 );
@@ -341,9 +357,15 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			if ( $storedSha1 == $sha1 ) {
 				return $status;
 			}
-			$status = Status::newFatal( 'FILECORRUPT' ); # Not an existing message but whatever
 			$this->output( sprintf( " File from URL %s doesn't match the expected sha1. Expected: %s. Actual: %s\n",
 				$fileurl, $sha1, $storedSha1 ) );
+
+			if ( $this->getOption( 'ignore-sha' ) ) {
+				// we have already logged the SHA mismatch, but we'll proceed regardless since we are ignoring them
+				return $status;
+			} else {
+				$status = Status::newFatal( 'FILECORRUPT' ); # Not an existing message but whatever
+			}
 		} else {
 			$this->output( sprintf( " Error when saving contents of URL %s: %s\n",
 				$fileurl, $status->getWikiText() ) );
