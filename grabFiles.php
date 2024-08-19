@@ -24,6 +24,7 @@ class GrabFiles extends FileGrabber {
 			'Grabs files from a pre-existing wiki into a new wiki, using file upload configuration of the local wiki.'
 		);
 		$this->addOption( 'from', 'Name of file to start from', false, true );
+		$this->addOption( 'to', 'Name of file to end at', false, true );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
 	}
 
@@ -49,11 +50,16 @@ class GrabFiles extends FileGrabber {
 		];
 
 		$gaifrom = $this->getOption( 'from' );
+		$gaito = $this->getOption( 'to' );
 		$more = true;
 		$count = 0;
 
 		if ( $gaifrom !== null ) {
 			$params['gaifrom'] = $gaifrom;
+		}
+
+		if ( $gaito !== null ) {
+			$params['gaito'] = $gaito;
 		}
 
 		$this->output( "Processing and downloading files...\n" );
