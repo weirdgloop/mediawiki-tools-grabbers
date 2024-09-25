@@ -398,7 +398,7 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 					);
 				} else {
 					# Whoops! resulting title already exists locally, here we go again...
-					$pageObj = $this->resolveConflictingTitle( $resultingPageID, $resultingNs, $resultingTitle, $conflictingPageID );
+					$pageObj = $this->resolveConflictingTitle( $resultingNs, $resultingTitle, $conflictingPageID, $resultingPageID, $conflictingPageID );
 				}
 
 				if ( $pageObj && $initialConflict === 0 ) {
