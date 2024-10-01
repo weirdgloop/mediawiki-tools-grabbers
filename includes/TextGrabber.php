@@ -337,12 +337,12 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 	 * @param string $title Ttile (dbkey) of the conflicting page
 	 * @param int $remotePageID The remote page ID with the given title
 	 * @param int $conflictingPageID The existing local page ID with the given title
-	 * @param int $initialConflict optional - original conflicting local page ID
+	 * @param int[] $initialConflicts optional - original conflicting local page IDs
 	 *     to avoid endless loops if pages were moved in round
 	 * @return object A page object retrieved from database if an endless loop is
 	 *     detected, used internally on recursive calls
 	 */
-	function resolveConflictingTitle( $namespace, $title, $remotePageID, $conflictingPageID, $initialConflict = 0 ) {
+	function resolveConflictingTitle( $namespace, $title, $remotePageID, $conflictingPageID, $initialConflicts = [] ) {
 		$pageObj = null;
 		$pageTitle = Title::makeTitle( $namespace, $title );
 		$this->output(
@@ -380,8 +380,8 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 
 			if ( $resultingPageID ) {
 
-				if ( $initialConflict == $resultingPageID ) {
-					# This should never happen, unless we move A->B, C->A, B->C
+				if ( in_array( $resultingPageID, $initialConflicts ) ) {
+					# This will happen if we move A->B, C->A, B->C
 					# In this case, we can't just rename, because it will blatantly violate the unique key for title
 					# Get the page information, delete it from DB and restore it after the move
 					$this->output( "Endless loop detected! Storing page ID $resultingPageID for later restore.\n" );
@@ -398,10 +398,10 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 					);
 				} else {
 					# Whoops! resulting title already exists locally, here we go again...
-					$pageObj = $this->resolveConflictingTitle( $resultingNs, $resultingTitle, $conflictingPageID, $resultingPageID, $conflictingPageID );
+					$pageObj = $this->resolveConflictingTitle( $resultingNs, $resultingTitle, $conflictingPageID, $resultingPageID, array_merge( $initialConflicts, [ $conflictingPageID ] ) );
 				}
 
-				if ( $pageObj && $initialConflict === 0 ) {
+				if ( $pageObj && count( $initialConflicts ) === 0 ) {
 					# Once we're resolved all conflicts, if we returend a $pageObj and we're on the originall call,
 					# restore the deleted page entry, with the correct page ID.
 					$this->output( sprintf( "Restoring page ID %s at title %s.\n",
