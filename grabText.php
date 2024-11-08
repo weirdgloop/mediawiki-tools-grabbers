@@ -63,7 +63,7 @@ class GrabText extends TextGrabber {
 		}
 		if ( $this->getOption( 'skip-fandom-comments' ) ) {
 			$grabFromAllNamespaces = false;
-			$textNamespaces = array_filter( $textNamespaces, static::FANDOM_COMMENT_NAMESPACES );
+			$textNamespaces = array_diff( $textNamespaces, static::FANDOM_COMMENT_NAMESPACES );
 		}
 		if ( !$textNamespaces ) {
 			$this->fatalError( 'Got no namespaces' );
