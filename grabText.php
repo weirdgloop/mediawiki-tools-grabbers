@@ -38,7 +38,7 @@ class GrabText extends TextGrabber {
 
 		$params = [
 			'meta' => 'siteinfo',
-			'siprop' => 'namespaces|statistics|namespacealiases'
+			'siprop' => 'namespaces|statistics'
 		];
 		$result = $this->bot->query( $params );
 		$siteinfo = $result['query'];

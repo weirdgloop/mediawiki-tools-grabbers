@@ -54,7 +54,7 @@ class GrabDeletedText extends TextGrabber {
 
 		$params = [
 			'meta' => 'siteinfo',
-			'siprop' => 'namespaces|statistics|namespacealiases'
+			'siprop' => 'namespaces'
 		];
 		$result = $this->bot->query( $params );
 		$siteinfo = $result['query'];
