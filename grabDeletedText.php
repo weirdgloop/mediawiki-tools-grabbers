@@ -50,7 +50,7 @@ class GrabDeletedText extends TextGrabber {
 			$this->endDate = wfTimestampNow();
 		}
 
-		$this->output( "Retreiving namespaces list...\n" );
+		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
 			'meta' => 'siteinfo',

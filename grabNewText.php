@@ -157,7 +157,7 @@ class GrabNewText extends TextGrabber {
 			$params['rcnamespace'] = implode( '|', $this->namespaces );
 		}
 
-		$this->output( "Retreiving list of changed pages...\n" );
+		$this->output( "Retrieving list of changed pages...\n" );
 		while ( $more ) {
 			$result = $this->bot->query( $params );
 			if ( empty( $result['query']['recentchanges'] ) ) {
