@@ -23,6 +23,19 @@ require_once 'mediawikibot.class.php';
 
 abstract class ExternalWikiGrabber extends Maintenance {
 
+	protected const FANDOM_COMMENT_NAMESPACES = [
+		500, // User blog
+		501, // User blog comment
+		502, // Blog
+		503, // Blog talk
+		1200, // Message Wall
+		1201, // Thread
+		1202, // Message Wall Greeting
+		2000, // Board
+		2001, // Board Thread
+		2002, // Topic
+	];
+
 	/**
 	 * Handle to the primary database connection
 	 */

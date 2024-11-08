@@ -97,9 +97,39 @@ class GrabNewText extends TextGrabber {
 			$this->output( "Using the latest revision timestamp in our database: $this->startDate\n" );
 		}
 
-		if ( $this->hasOption( 'namespaces' ) ) {
-			$this->namespaces = explode( '|', $this->getOption( 'namespaces' ) );
+		$this->output( "Retrieving namespaces list...\n" );
+
+		$params = [
+			'meta' => 'siteinfo',
+			'siprop' => 'namespaces'
+		];
+		$result = $this->bot->query( $params );
+		$siteinfo = $result['query'];
+
+		# No data - bail out early
+		if ( empty( $siteinfo ) ) {
+			$this->fatalError( 'No siteinfo data found...' );
 		}
+
+		$textNamespaces = [];
+		if ( $this->hasOption( 'namespaces' ) ) {
+			$textNamespaces = explode( '|', $this->getOption( 'namespaces', '' ) );
+		} else {
+			foreach ( array_keys( $siteinfo['namespaces'] ) as $ns ) {
+				# Ignore special
+				if ( $ns >= 0 ) {
+					$textNamespaces[] = $ns;
+				}
+			}
+		}
+		if ( $this->getOption( 'skip-fandom-comments' ) ) {
+			$textNamespaces = array_filter( $textNamespaces, static::FANDOM_COMMENT_NAMESPACES );
+		}
+		if ( !$textNamespaces ) {
+			$this->fatalError( 'Got no namespaces...' );
+		}
+
+		$this->namespaces = $textNamespaces;
 
 		# Get last revision id to avoid duplicates
 		$this->lastRevision = (int)$this->dbw->selectField(
