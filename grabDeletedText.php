@@ -211,6 +211,17 @@ class GrabDeletedText extends TextGrabber {
 				continue;
 			}
 
+			// Check if archived revision is already there to prevent duplicate entries.
+			$count = $this->dbw->selectRowCount(
+				'archive',
+				'1',
+				[ 'ar_rev_id' => $revisionId ],
+				__METHOD__
+			);
+			if ( $count ) {
+				continue;
+			}
+
 			if ( !isset( $revision['contentmodel'] ) ) {
 				$revision['contentmodel'] = $defaultModel;
 			}
