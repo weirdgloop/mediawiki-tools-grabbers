@@ -123,8 +123,8 @@ class MediaWikiBot {
 		$username = 'bot',
 		$password = 'passwd',
 		$useragent = 'WikimediaBot Framework by JKH',
-		$cookies = 'cookies.tmp',
-		$fandomAuth = false
+		$fandomAuth = false,
+		$cookies = 'cookies.tmp'
 	) {
 		/** Set some constants
 		 */
