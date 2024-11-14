@@ -123,7 +123,8 @@ class MediaWikiBot {
 		$username = 'bot',
 		$password = 'passwd',
 		$useragent = 'WikimediaBot Framework by JKH',
-		$cookies = 'cookies.tmp'
+		$cookies = 'cookies.tmp',
+		$fandomAuth = false
 	) {
 		/** Set some constants
 		 */
@@ -132,7 +133,10 @@ class MediaWikiBot {
 		define( 'USERNAME', $username );
 		define( 'PASSWORD', $password );
 		define( 'USERAGENT', $useragent );
-		define( 'COOKIES', $cookies );
+
+		// Avoid reusing cookies when credentials have changed.
+		$loginMethod = $fandomAuth ? 'fandom' : 'mediawiki';
+		define( 'COOKIES', "$username-$loginMethod-$cookies" );
 
 		// cURL handle for connection reuse.
 		$this->ch = curl_init();

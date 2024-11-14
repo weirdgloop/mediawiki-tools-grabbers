@@ -89,7 +89,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				'json',
 				$user,
 				$password,
-				$useragent
+				$useragent,
+				$this->hasOption( 'fandom-auth' )
 			);
 			if ( $this->getOption( 'fandom-auth' ) ) {
 				$error = $this->bot->fandom_login( $fandomAppId );
@@ -108,7 +109,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				'json',
 				'',
 				'',
-				$useragent
+				$useragent,
+				$this->hasOption( 'fandom-auth' )
 			);
 		}
 
