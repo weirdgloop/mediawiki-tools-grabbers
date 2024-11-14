@@ -211,6 +211,7 @@ class GrabDeletedText extends TextGrabber {
 				continue;
 			}
 
+			// TODO: Handle title changes in case the page was moved before deletion.
 			// Check if archived revision is already there to prevent duplicate entries.
 			$count = $this->dbw->selectRowCount(
 				'archive',
