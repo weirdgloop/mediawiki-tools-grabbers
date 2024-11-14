@@ -181,6 +181,10 @@ class MediaWikiBot {
 	 *  It returns null if success, or an array on failure
 	 */
 	public function login( $init = true ) {
+		// Skip login if session cookies are already set.
+		if ( file_exists( COOKIES ) && $init ) {
+			return null;
+		}
 		# build the url
 		$url = $this->api_url( __FUNCTION__ );
 		# build the params
@@ -221,6 +225,11 @@ class MediaWikiBot {
 	public function fandom_login( $fandomAppId ) {
 		$this->fandomAuth = true;
 		$this->fandomAppId = $fandomAppId;
+
+		// Skip login if session cookies are already set.
+		if ( file_exists( COOKIES ) ) {
+			return null;
+		}
 
 		// Check if already logged-in to avoid hitting limits if running multiple times in quick succession.
 		if ( !is_array( $this->fandom_whoami() ) ) {
