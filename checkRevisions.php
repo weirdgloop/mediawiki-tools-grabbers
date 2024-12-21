@@ -91,11 +91,19 @@ class CheckRevisions extends TextGrabber {
 		$this->reportInterval = intval( $this->getOption( 'report', 5000 ) );
 		$this->dry = $this->getOption( 'dry', false );
 
+		$params = [
+			'list' => 'allrevisions',
+			'arvprop' => 'ids|timestamp|sha1',
+			'arvlimit' => 'max',
+			'arvdir' => 'newer',
+		];
+
 		$this->startDate = $this->getOption( 'startdate' );
 		if ( $this->startDate ) {
 			if (!wfTimestamp(TS_ISO_8601, $this->startDate)) {
 				$this->fatalError('Invalid start date format.');
 			}
+			$params['arvstart'] = $this->startDate;
 		}
 
 		$this->endDate = $this->getOption( 'enddate' );
@@ -103,17 +111,8 @@ class CheckRevisions extends TextGrabber {
 			if (!wfTimestamp(TS_ISO_8601, $this->endDate)) {
 				$this->fatalError('Invalid end date format.');
 			}
+			$params['arvend'] = $this->endDate;
 		}
-
-		$params = [
-			'list' => 'allrevisions',
-			'arvprop' => 'ids|timestamp|sha1',
-			'arvlimit' => 'max',
-			'arvdir' => 'newer',
-			'arvstart' => $this->startDate,
-			'arvend' => $this->endDate
-		];
-
 
 		$more = true;
 		$checkpoint = $this->reportInterval;
