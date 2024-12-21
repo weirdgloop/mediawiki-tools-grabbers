@@ -84,6 +84,8 @@ class CheckRevisions extends TextGrabber {
 		$this->addOption( 'enddate', 'Any revision after this time will not be checked on the remote wiki', false, true );
 		$this->addOption( 'report', 'Report position after every n revisions processed (default is 5000)', false, true );
 		$this->addOption( 'dry', 'Perform a dry-run, where the database is not modified', false, false );
+		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to check. Defaults to all namespaces', false, true );
+		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
 	}
 
 	public function execute() {
@@ -114,6 +116,40 @@ class CheckRevisions extends TextGrabber {
 			$params['arvend'] = $this->endDate;
 		}
 
+		$this->output( "Retrieving namespaces list...\n" );
+
+		$siparams = [
+			'meta' => 'siteinfo',
+			'siprop' => 'namespaces'
+		];
+		$result = $this->bot->query( $siparams );
+		$siteinfo = $result['query'];
+
+		# No data - bail out early
+		if ( empty( $siteinfo ) ) {
+			$this->fatalError( 'No siteinfo data found...' );
+		}
+
+		$textNamespaces = [];
+		if ( $this->hasOption( 'namespaces' ) ) {
+			$textNamespaces = explode( '|', $this->getOption( 'namespaces', '' ) );
+		} else {
+			foreach ( array_keys( $siteinfo['namespaces'] ) as $ns ) {
+				# Ignore special
+				if ( $ns >= 0 ) {
+					$textNamespaces[] = $ns;
+				}
+			}
+		}
+		if ( $this->getOption( 'skip-fandom-comments' ) ) {
+			$textNamespaces = array_diff( $textNamespaces, static::FANDOM_COMMENT_NAMESPACES );
+		}
+		if ( !$textNamespaces ) {
+			$this->fatalError( 'Got no namespaces...' );
+		}
+
+		$params['arvnamespace'] = implode( '|', $textNamespaces );
+
 		$more = true;
 		$checkpoint = $this->reportInterval;
 
@@ -126,6 +162,18 @@ class CheckRevisions extends TextGrabber {
 			}
 
 			foreach ( $result['query']['allrevisions'] as $page ) {
+				if ( isset( $result['continue'] ) ) {
+					$params = array_merge( $params, $result['continue'] );
+				} else {
+					$more = false;
+				}
+
+				if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $page['title'] ) ) {
+					// Fandom's comment system creates a new page for each comment, which is terrible.
+					//$this->output( "Skipped page \"{$page['title']}\": Fandom comment page.\n" );
+					continue;
+				}
+
 				foreach ( $page['revisions'] as $rev ) {
 					$this->handleRevision( $rev );
 					$this->revCount++;
@@ -133,12 +181,6 @@ class CheckRevisions extends TextGrabber {
 						$this->output( "{$this->revCount} revisions processed.\n" );
 						$checkpoint = $checkpoint + $this->reportInterval;
 					}
-				}
-
-				if ( isset( $result['continue'] ) ) {
-					$params = array_merge( $params, $result['continue'] );
-				} else {
-					$more = false;
 				}
 			}
 		} while ( $more );
