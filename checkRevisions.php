@@ -157,17 +157,21 @@ class CheckRevisions extends TextGrabber {
 		do {
 			$result = $this->bot->query( $params );
 
+			if ( isset( $result['continue'] ) ) {
+				$params = array_merge( $params, $result['continue'] );
+			} else {
+				$more = false;
+			}
+
 			if ( empty( $result['query']['allrevisions'] ) ) {
+				if ( $more ) {
+					$this->output( "No result in this query due to miser mode.\n" );
+					continue;
+				}
 				$this->fatalError( 'No revisions found on remote wiki.' );
 			}
 
 			foreach ( $result['query']['allrevisions'] as $page ) {
-				if ( isset( $result['continue'] ) ) {
-					$params = array_merge( $params, $result['continue'] );
-				} else {
-					$more = false;
-				}
-
 				if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $page['title'] ) ) {
 					// Fandom's comment system creates a new page for each comment, which is terrible.
 					//$this->output( "Skipped page \"{$page['title']}\": Fandom comment page.\n" );
