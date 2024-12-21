@@ -212,17 +212,15 @@ class GrabRevisions extends TextGrabber {
 	 * @return int Number of pages processed.
 	 */
 	protected function processRevisionsFromNamespaces( $ns, $arvstart = null, $arvend = null ) {
-		$this->output( "Processing pages from namespace $ns...\n" );
+		$this->output( "Processing pages...\n" );
 
 		$params = [
 			'list' => 'allrevisions',
 			'arvlimit' => 'max',
 			'arvdir' => 'newer', // Grab old revisions first
 			'arvprop' => 'ids|flags|timestamp|user|userid|comment|content|tags|contentmodel|size',
+			'arvnamespace' => $ns,
 		];
-		if ( $this->hasOption( 'namespaces' ) ) {
-			$params['arvnamespace'] = $ns;
-		}
 		if ( $this->getOption( 'arvstart' ) || $this->getOption( 'new-revisions' ) ) {
 			$params['arvstart'] = $arvstart;
 		}
