@@ -268,7 +268,7 @@ class CheckRevisions extends TextGrabber {
 				$sha = Wikimedia\base_convert( $rev->getSha1(), 36, 16, 40 );
 				if ( !is_null( $sha ) && array_key_exists( 'sha1', $remoteRev ) && $sha != $remoteRev['sha1'] ) {
 					// The checksum of our revision and the remote revision doesn't match.
-					$this->output( "Bad revision (hash): {$remoteRev['revid']} (ours: ${sha} | theirs: ${remoteRev['sha1']})\n" );
+					$this->output( "Bad revision (hash): {$remoteRev['revid']} (ours: {$sha} | theirs: {$remoteRev['sha1']})\n" );
 					$this->mismatchCount++;
 
 					// Check whether our revision is an empty revision, because sites like Fandom often have empty

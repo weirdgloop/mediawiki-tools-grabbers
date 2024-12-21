@@ -145,7 +145,7 @@ class GrabDeletedText extends TextGrabber {
 				foreach ( $pageChunks as $pageChunk ) {
 					if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $pageChunk['title'] ) ) {
 						// Fandom's comment system creates a new page for each comment, which is terrible.
-						$this->output( "Skipped page \"${pageChunk['title']}\": Fandom comment page.\n" );
+						$this->output( "Skipped page \"{$pageChunk['title']}\": Fandom comment page.\n" );
 						continue;
 					}
 

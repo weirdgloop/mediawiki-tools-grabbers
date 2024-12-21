@@ -244,7 +244,7 @@ class GrabRevisions extends TextGrabber {
 				foreach ( $pages as $pageInfo ) {
 					if ( $this->getOption( 'skip-fandom-comments' ) && preg_match( '/^(.*)(\/@comment-.*-20\d{12}){1,2}$/', $pageInfo['title'] ) ) {
 						// Fandom's comment system creates a new page for each comment, which is terrible.
-						$this->output( "Skipped page \"${pageInfo['title']}\": Fandom comment page.\n" );
+						$this->output( "Skipped page \"{$pageInfo['title']}\": Fandom comment page.\n" );
 						continue;
 					}
 
