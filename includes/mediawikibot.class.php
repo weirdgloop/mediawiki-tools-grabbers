@@ -44,6 +44,7 @@
  *  DEALINGS IN THE SOFTWARE.
  */
 
+#[\AllowDynamicProperties]
 class MediaWikiBot {
 
 	/** cURL handle for connection reuse.
