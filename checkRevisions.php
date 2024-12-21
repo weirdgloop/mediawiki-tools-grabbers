@@ -179,7 +179,7 @@ class CheckRevisions extends TextGrabber {
 				}
 
 				foreach ( $page['revisions'] as $rev ) {
-					$this->handleRevision( $rev );
+					$this->handleRevision( $rev, $page['pageid'], Title::makeTitle( $page['ns'], $page['title'] ) );
 					$this->revCount++;
 					if ( $this->revCount >= $checkpoint ) {
 						$this->output( "{$this->revCount} revisions processed.\n" );
@@ -251,18 +251,12 @@ class CheckRevisions extends TextGrabber {
 		$this->output("Replaced revision $rev with content from remote wiki\n");
 	}
 
-	public function handleRevision( $remoteRev ) {
+	public function handleRevision( $remoteRev, $pageID, $title ) {
 		$rev = $this->revisionStore->getRevisionById( $remoteRev['revid'] );
 
 		if ( is_null( $rev ) ) {
 			// The revision is missing from our database.
 			$this->output( "Bad revision (missing): {$remoteRev['revid']}\n" );
-
-			$parentRev = $this->revisionStore->getRevisionById( $remoteRev['parentid'] );
-			if ( !$parentRev || !$remoteRev['parentid'] ) {
-				$this->output( "Parent rev {$remoteRev['parentid']} not found in DB for rev {$remoteRev['revid']} - cannot fix missing revision\n" );
-				return;
-			}
 
 			$remoteRev = $this->fetchRemoteRevision( $remoteRev['revid'] );
 
@@ -290,8 +284,8 @@ class CheckRevisions extends TextGrabber {
 				$revdeleted = $revdeleted | RevisionRecord::DELETED_RESTRICTED;
 			}
 
-			$rev = MutableRevisionRecord::newFromParentRevision( $parentRev );
-			$content = ContentHandler::makeContent( $text, null, $remoteRev['contentmodel'], $remoteRev['contentformat'] );
+			$rev = new MutableRevisionRecord( $title );
+			$content = ContentHandler::makeContent( $text, null, $remoteRev['contentmodel'], $remoteRev['contentformat'] ?? null );
 			$rev->setId( $remoteRev['revid'] );
 			$rev->setComment( CommentStoreComment::newUnsavedComment( $comment ) );
 			$rev->setContent( SlotRecord::MAIN, $content );
@@ -300,6 +294,10 @@ class CheckRevisions extends TextGrabber {
 			$rev->setMinorEdit( isset( $remoteRev['minor'] ) );
 			$userIdentity = $this->getUserIdentity( $remoteRev['userid'], $remoteRev['user'] );
 			$rev->setUser( $userIdentity );
+			$rev->setPageId( $pageID );
+			if ( isset( $remoteRev['parentid'] ) ) {
+				$rev->setParentId( $remoteRev['parentid'] );
+			}
 
 			if ( $this->dry ) {
 				$this->output( "[DRY]: Would have inserted revision {$remoteRev['revid']} on {$rev->getPageId()} with content from {$remoteRev['user']} from remote wiki\n" );
