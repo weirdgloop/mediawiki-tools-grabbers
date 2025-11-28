@@ -14,6 +14,7 @@
  */
 
 use MediaWiki\MediaWikiServices;
+use Wikimedia\IPUtils;
 
 require_once 'includes/ExternalWikiGrabber.php';
 
@@ -32,10 +33,8 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 
 		if ( $this->hasOption( 'truncate' ) ) {
 			$this->output( "Deleting existing user block entries...\n" );
-			$this->dbw->truncateTable(
-				'ipblocks',
-				__METHOD__
-			);
+			$this->dbw->truncateTable( 'block', __METHOD__ );
+			$this->dbw->truncateTable( 'block_target',  __METHOD__ );
 		}
 
 		$startDate = $this->getOption( 'startdate' );
@@ -105,29 +104,43 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 		$ts = wfTimestamp( TS_MW, $entry['timestamp'] );
 
 		$commentStore = MediaWikiServices::getInstance()->getCommentStore();
-		$commentFields = $commentStore->insert( $this->dbw, 'ipb_reason', $entry['reason'] );
+		$commentFields = $commentStore->insert( $this->dbw, 'bl_reason', $entry['reason'] );
+
+		$isUser = $entry['userid'] !== 0;
+		$ipHex = null;
+		if ( isset( $entry['rangestart'] ) ) {
+			$ipHex = $entry['rangestart'];
+		} elseif ( !$isUser ) {
+			$ipHex = IPUtils::toHex( $entry['user'] );
+		}
+
+		$targetData = [
+			'bt_address' => $isUser ? null : $entry['user'],
+			'bt_user' => $isUser ? $entry['userid'] : null,
+			'bt_user_text' => $isUser ? $entry['user'] : null,
+			'bt_auto' => 0,
+			'bt_range_start' => $entry['rangestart'] ?? null,
+			'bt_range_end' => $entry['rangeend'] ?? null,
+			'bt_ip_hex' => $ipHex,
+			'bt_count' => 1
+		];
+		$this->dbw->insert( 'block_target', $targetData, __METHOD__ );
+		$targetRowId = $this->dbw->insertId();
 
 		$data = [
-			'ipb_id' => $entry['id'],
-			'ipb_address' => $entry['user'],
-			'ipb_user' => $entry['userid'],
-			#'ipb_by' => $entry['byid'],
-			#'ipb_by_text' => $entry['by'],
-			#'ipb_reason' => $entry['reason'],
-			'ipb_by_actor' => $this->getActorFromUser( $entry['byid'], $entry['by'] ),
-			'ipb_timestamp' => $ts,
-			'ipb_auto' => 0,
-			'ipb_anon_only' => isset( $entry['anononly'] ),
-			'ipb_create_account' => isset( $entry['nocreate'] ),
-			'ipb_enable_autoblock' => isset( $entry['autoblock'] ),
-			'ipb_expiry' => ( $entry['expiry'] == 'infinity' ? $this->dbw->getInfinity() : wfTimestamp( TS_MW, $entry['expiry'] ) ),
-			'ipb_range_start' => ( isset( $entry['rangestart'] ) ? $entry['rangestart'] : false ),
-			'ipb_range_end' => ( isset( $entry['rangeend'] ) ? $entry['rangeend'] : false ),
-			'ipb_deleted' => isset( $entry['hidden'] ),
-			'ipb_block_email' => isset( $entry['noemail'] ),
-			'ipb_allow_usertalk' => isset( $entry['allowusertalk'] ),
+			'bl_id' => $entry['id'],
+			'bl_target' => $targetRowId,
+			'bl_by_actor' => $this->getActorFromUser( $entry['byid'], $entry['by'] ),
+			'bl_timestamp' => $ts,
+			'bl_anon_only' => isset( $entry['anononly'] ),
+			'bl_create_account' => isset( $entry['nocreate'] ),
+			'bl_enable_autoblock' => isset( $entry['autoblock'] ),
+			'bl_expiry' => ( $entry['expiry'] == 'infinity' ? $this->dbw->getInfinity() : wfTimestamp( TS_MW, $entry['expiry'] ) ),
+			'bl_deleted' => isset( $entry['hidden'] ),
+			'bl_block_email' => isset( $entry['noemail'] ),
+			'bl_allow_usertalk' => isset( $entry['allowusertalk'] ),
 		] + $commentFields;
-		$this->dbw->insert( 'ipblocks', $data, __METHOD__ );
+		$this->dbw->insert( 'block', $data, __METHOD__ );
 		$this->dbw->commit();
 	}
 }
