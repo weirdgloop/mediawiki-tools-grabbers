@@ -680,7 +680,7 @@ class GrabNewText extends TextGrabber {
 		$result = $this->bot->query( $params );
 
 		if ( !$result || isset( $result['error'] ) ) {
-			if ( isset( $result['error'] ) && $result['error']['code'] == 'drvpermissiondenied' ) {
+			if ( isset( $result['error'] ) && $result['error']['code'] == 'permissiondenied' ) {
 				$this->output( "Warning: Current user can't see deleted revisions.\n" .
 					"Unable to see deleted revisions for title $pageTitle\n" );
 				$this->canSeeDeletedRevs = false;
