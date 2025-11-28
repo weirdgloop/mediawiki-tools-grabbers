@@ -26,9 +26,9 @@ class GrabProtectedTitles extends ExternalWikiGrabber {
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasOption('truncate') ) {
+		if ( $this->hasOption( 'truncate' ) ) {
 			$this->output( "Deleting existing protected title entries...\n" );
-			$this->dbw->truncate(
+			$this->dbw->truncateTable(
 				'protected_titles',
 				__METHOD__
 			);

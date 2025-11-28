@@ -16,7 +16,7 @@ use MediaWiki\User\ActorStore;
 use MediaWiki\User\UserIdentity;
 use MediaWiki\User\UserIdentityValue;
 use MediaWiki\User\UserNameUtils;
-use Wikimedia\Rdbms\IDatabase;
+use Wikimedia\Rdbms\IMaintainableDatabase;
 
 require_once __DIR__ . '/../../maintenance/Maintenance.php';
 require_once 'mediawikibot.class.php';
@@ -39,7 +39,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	/**
 	 * Handle to the primary database connection
 	 */
-	protected IDatabase $dbw;
+	protected IMaintainableDatabase $dbw;
 
 	protected MediaWikiBot $bot;
 

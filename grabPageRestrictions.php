@@ -35,9 +35,9 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasOption('truncate') ) {
+		if ( $this->hasOption( 'truncate' ) ) {
 			$this->output( "Deleting existing page restriction entries...\n" );
-			$this->dbw->truncate(
+			$this->dbw->truncateTable(
 				'page_restrictions',
 				__METHOD__
 			);

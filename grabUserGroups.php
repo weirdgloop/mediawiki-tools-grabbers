@@ -39,9 +39,9 @@ class GrabUserGroups extends ExternalWikiGrabber {
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasOption('truncate') ) {
+		if ( $this->hasOption( 'truncate' ) ) {
 			$this->output( "Deleting existing user group entries...\n" );
-			$this->dbw->truncate(
+			$this->dbw->truncateTable(
 				'user_groups',
 				__METHOD__
 			);

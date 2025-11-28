@@ -30,9 +30,9 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasOption('truncate') ) {
+		if ( $this->hasOption( 'truncate' ) ) {
 			$this->output( "Deleting existing user block entries...\n" );
-			$this->dbw->truncate(
+			$this->dbw->truncateTable(
 				'ipblocks',
 				__METHOD__
 			);
