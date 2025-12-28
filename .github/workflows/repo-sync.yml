@@ -10,14 +10,17 @@ jobs:
     name: Repo Sync
     runs-on: ubuntu-latest
     steps:
+    - run: |
+        echo repo_name=$(echo "$GITHUB_REPOSITORY" | awk -F / '{print $2}') >> $GITHUB_ENV
+        echo upstream_branch=$(echo "$GITHUB_REF_NAME" | awk -F / '{print $2}') >> $GITHUB_ENV
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
     - uses: repo-sync/github-sync@v2
       name: Sync repo to branch
       with:
-        source_repo: wikimedia/mediawiki-tools-grabbers
-        source_branch: master
+        source_repo: "wikimedia/${{ env.repo_name }}"
+        source_branch: ${{ env.upstream_branch }}
         destination_branch: weirdgloop/repo-sync
         github_token: ${{ secrets.GITHUB_TOKEN }}
     - name: Check for changes
@@ -30,6 +33,6 @@ jobs:
       if: env.changes_exist == 'true'
       with:
         source_branch: weirdgloop/repo-sync
-        destination_branch: weirdgloop/main
+        destination_branch: ${{ github.ref_name }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
         pr_title: "Sync with upstream"
