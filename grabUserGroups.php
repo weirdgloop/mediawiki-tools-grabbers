@@ -34,6 +34,7 @@ class GrabUserGroups extends ExternalWikiGrabber {
 		$this->addOption( 'groups', 'Get only a specific list of groups (pipe separated list of group names, by default everything except *, user and autoconfirmed)', false, true );
 		$this->addOption( 'truncate', 'Delete existing user group assignments from the new wiki.', false, false );
 		$this->addOption( 'wikia', 'Set this param if the target wiki is on Wikia/Fandom, to automatically skip most of the global user groups that are irrelevant outside there', false, false );
+		$this->addOption( 'wgg', 'Set this param if the target wiki is on wiki.gg, to automatically skip most of the global user groups that are irrelevant outside there', false, false );
 	}
 
 	public function execute() {
@@ -86,6 +87,24 @@ class GrabUserGroups extends ExternalWikiGrabber {
 				'vstf',
 				'wiki-representative',
 				'wiki-specialist'
+			] );
+		}
+
+		if ( $this->getOption( 'wgg' ) ) {
+			$this->badGroups = array_merge( $this->badGroups, [
+				'emailconfirmed',
+				'global-af-exempt',
+				'global-bot',
+				'global-interface-admin',
+				'global-sysop',
+				'oauthmanager',
+				'oi-wikidev-442',
+				'oi-wikidev-855',
+				'staff',
+				'staff-bot',
+				'supporter',
+				'titan',
+				'vector-tester',
 			] );
 		}
 
