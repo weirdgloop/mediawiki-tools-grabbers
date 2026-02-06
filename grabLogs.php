@@ -15,7 +15,8 @@
  * - Edward Chernenko <edwardspec@gmail.com> (MediaWikiDumper 1.1.5, logs.pl)
  */
 
-use MediaWiki\Linker\LinkTarget;
+use MediaWiki\Logging\LogPage;
+use MediaWiki\Title\Title;
 use Wikimedia\Timestamp\ConvertibleTimestamp;
 
 require_once 'includes/ExternalWikiGrabber.php';

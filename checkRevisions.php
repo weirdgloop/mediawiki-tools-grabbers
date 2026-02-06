@@ -12,10 +12,13 @@
  * @date 10 September 2023
  */
 
+use MediaWiki\CommentStore\CommentStoreComment;
+use MediaWiki\Content\ContentHandler;
 use MediaWiki\Revision\RevisionRecord;
 use MediaWiki\Revision\MutableRevisionRecord;
 use MediaWiki\Revision\RevisionAccessException;
 use MediaWiki\Revision\SlotRecord;
+use MediaWiki\Title\Title;
 
 require_once 'includes/TextGrabber.php';
 

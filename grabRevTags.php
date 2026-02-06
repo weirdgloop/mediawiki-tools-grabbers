@@ -12,9 +12,6 @@
  * @date 5 August 2019
  */
 
-use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\SlotRecord;
-
 require_once 'includes/TextGrabber.php';
 
 class GrabRevTags extends TextGrabber {

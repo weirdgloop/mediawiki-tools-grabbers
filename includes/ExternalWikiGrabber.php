@@ -11,6 +11,7 @@
  * @version 1.1
  */
 
+use MediaWiki\CommentStore\CommentStore;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\User\ActorStore;
 use MediaWiki\User\UserIdentity;

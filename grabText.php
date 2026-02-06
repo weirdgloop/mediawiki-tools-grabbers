@@ -13,6 +13,7 @@
  */
 
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Title\Title;
 
 require_once 'includes/TextGrabber.php';
 

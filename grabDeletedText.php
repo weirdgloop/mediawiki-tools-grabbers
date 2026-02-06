@@ -13,7 +13,7 @@
  */
 
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Revision\SlotRecord;
+use MediaWiki\Title\Title;
 
 require_once 'includes/TextGrabber.php';
 

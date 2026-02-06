@@ -11,7 +11,9 @@
  */
 
 use GuzzleHttp\Psr7\LazyOpenStream;
+use MediaWiki\FileRepo\LocalRepo;
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Mime\MimeAnalyzer;
 
 require_once 'ExternalWikiGrabber.php';
 

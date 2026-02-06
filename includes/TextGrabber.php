@@ -10,10 +10,16 @@
  * @note Based on code by Calimonious the Estrange, Misza, Jack Phoenix and Edward Chernenko.
  */
 
+use MediaWiki\Content\ContentHandler;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Page\PageIdentity;
 use MediaWiki\Revision\MutableRevisionRecord;
 use MediaWiki\Revision\RevisionRecord;
+use MediaWiki\Revision\RevisionStore;
 use MediaWiki\Revision\SlotRecord;
+use MediaWiki\Storage\NameTableStore;
+use MediaWiki\Storage\SqlBlobStore;
+use MediaWiki\Title\Title;
 
 require_once 'ExternalWikiGrabber.php';
 

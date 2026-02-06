@@ -12,8 +12,10 @@
  * @date 5 August 2019
  */
 
+use MediaWiki\JobQueue\Jobs\RefreshLinksJob;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Revision\RevisionRecord;
+use MediaWiki\Title\Title;
 
 require_once 'includes/TextGrabber.php';
 

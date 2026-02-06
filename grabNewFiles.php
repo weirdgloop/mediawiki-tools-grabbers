@@ -11,6 +11,9 @@
  * @note Based on code by Calimonious the Estrange, Misza, Jack Phoenix and Edward Chernenko.
  */
 
+use MediaWiki\FileRepo\File\File;
+use MediaWiki\Title\Title;
+
 require_once 'includes/FileGrabber.php';
 
 class GrabNewFiles extends FileGrabber {
