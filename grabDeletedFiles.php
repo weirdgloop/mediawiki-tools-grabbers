@@ -81,7 +81,7 @@ class GrabDeletedFiles extends FileGrabber {
 
 		$this->output( "Downloading files... missing ones may have been deleted, or may be a sign of script failure. You may want to check via Special:Undelete.\n" );
 		$count = 0;
-		$dbr = wfGetDB( DB_REPLICA );
+		$dbr = $this->getDB( DB_REPLICA );
 		$result = $dbr->select(
 			'filearchive',
 			[ 'fa_storage_key', 'fa_name' ],

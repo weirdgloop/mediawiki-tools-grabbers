@@ -32,7 +32,7 @@ class PopulateUserTable extends Maintenance {
 		global $wgDBname;
 
 		# Get a single DB_PRIMARY connection
-		$this->dbw = wfGetDB( DB_PRIMARY, [], $this->getOption( 'db', $wgDBname ) );
+		$this->dbw = $this->getDB( DB_PRIMARY, [], $this->getOption( 'db', $wgDBname ) );
 
 		$this->populateUsersFromTable( 'actor', [
 			'id' => 'actor_user',
