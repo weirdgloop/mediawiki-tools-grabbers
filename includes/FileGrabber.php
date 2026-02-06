@@ -10,6 +10,7 @@
  * @note Based on code by Calimonious the Estrange, Misza, Jack Phoenix and Edward Chernenko.
  */
 
+use GuzzleHttp\Psr7\LazyOpenStream;
 use MediaWiki\MediaWikiServices;
 
 require_once 'ExternalWikiGrabber.php';
@@ -345,7 +346,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()
 			->create( $fileurl, [
 				'timeout' => 90,
-				'sink' => $targetTempFile,
+				'sink' => new LazyOpenStream( $targetTempFile, 'w' ),
 			], __METHOD__ );
 		$this->setRelevantAcceptHeader( $req, $relatedFileName );
 		$status = $req->execute();
