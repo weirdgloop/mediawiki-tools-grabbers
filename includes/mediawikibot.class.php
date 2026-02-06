@@ -309,7 +309,12 @@ class MediaWikiBot {
 		$data = $this->curl_post( $url, $params, $multipart );
 		# check data for grabbers; shut up loops are confusing it's too early.
 		# Note: $data can be an empty array, resulting from api generators returning zero results
-		if ( $data === false ) {
+		if ( is_numeric( $data ) && $data !== 0 ) {
+			echo "API error: ratelimited with a Retry-After value of {$data}s\n";
+			sleep( $data );
+			$data = $this->curl_post( $url, $params, $multipart );
+		}
+		if ( is_numeric( $data ) ) {
 			for ( $errors = 0; $errors < count( $this->retryTimes ); $errors++) {
 				$seconds = $this->retryTimes[$errors];
 				echo "API error: no results; retrying in {$seconds}s\n";
@@ -378,6 +383,23 @@ class MediaWikiBot {
 		curl_setopt( $this->ch, CURLOPT_TIMEOUT, 30 );
 		curl_setopt( $this->ch, CURLOPT_COOKIEFILE, COOKIES );
 		curl_setopt( $this->ch, CURLOPT_COOKIEJAR, COOKIES );
+		# save retry-after header for reattempts
+		$retryAfterHint = 0;
+		curl_setopt( $this->ch, CURLOPT_HEADERFUNCTION,
+			static function ( $ch, $header ) use ( &$retryAfterHint ) {
+				$length = strlen( $header );
+				if ( !str_contains( $header, ":" ) ) {
+					return $length;
+				}
+				[ $name, $value ] = explode( ":", $header, 2 );
+				$name = strtolower( $name );
+				$value = trim( $value );
+				if ( $name === 'retry-after' ) {
+					$retryAfterHint = intval( $value );
+				}
+				return $length;
+			}
+		);
 		# support Fandom auth
 		if ( $this->fandomAuth ) {
 			curl_setopt( $this->ch, CURLOPT_HTTPHEADER, [
@@ -401,7 +423,7 @@ class MediaWikiBot {
 			echo sprintf( "CURL ERROR: %s\n", curl_error( $this->ch ) );
 		}
 		# return the unserialized results
-		return $error !== 0 ? false : $this->format_results( $results, $params['format'] );
+		return $error !== 0 ? $retryAfterHint : $this->format_results( $results, $params['format'] );
 	}
 
 	/** Check for multipart method
