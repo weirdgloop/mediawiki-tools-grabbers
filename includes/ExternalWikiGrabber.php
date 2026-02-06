@@ -119,7 +119,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$this->dbw = $this->getDB( DB_PRIMARY, [], $this->getOption( 'db', $wgDBname ) );
 
 		$services = MediaWikiServices::getInstance();
-		$this->actorStore = $services->getActorStore();
+		$this->actorStore = $services->getActorStoreFactory()->getActorStoreForImport();
 		$this->commentStore = $services->getCommentStore();
 		$this->userNameUtils = $services->getUserNameUtils();
 	}

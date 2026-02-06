@@ -92,7 +92,7 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 		}
 
 		$services = MediaWikiServices::getInstance();
-		$this->revisionStore = $services->getRevisionStore();
+		$this->revisionStore = $services->getRevisionStoreFactory()->getRevisionStoreForImport();
 		$this->blobStore = $services->getBlobStore();
 		$this->contentModelStore = $services->getContentModelStore();
 		$this->slotRoleStore = $services->getSlotRoleStore();
