@@ -95,7 +95,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'media_type' => $fileVersion['mediatype'],
 			'deleted' => 0,
 			'sha1' => Wikimedia\base_convert( $fileVersion['sha1'], 16, 36, 31 ),
-			'metadata' => serialize( $this->processMetaData( $fileVersion['metadata'] ) ),
+			'metadata' => serialize( [] ),
 		];
 
 		$mime = $fileVersion['mime'];
@@ -215,7 +215,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'media_type' => $fileVersion['mediatype'],
 			'deleted' => $filedeleted,
 			'sha1' => Wikimedia\base_convert( $fileVersion['sha1'], 16, 36, 31 ),
-			'metadata' => serialize( $this->processMetaData( $fileVersion['metadata'] ) ),
+			'metadata' => serialize( [] ),
 		];
 
 		$mime = $fileVersion['mime'];

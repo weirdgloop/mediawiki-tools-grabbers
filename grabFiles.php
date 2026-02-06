@@ -45,7 +45,7 @@ class GrabFiles extends FileGrabber {
 			'generator' => 'allimages',
 			'gailimit' => 'max',
 			'prop' => 'imageinfo',
-			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|metadata|archivename|bitdepth|mediatype',
+			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|archivename|bitdepth|mediatype',
 			'iilimit' => 'max'
 		];
 
