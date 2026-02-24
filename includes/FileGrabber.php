@@ -50,6 +50,10 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		parent::execute();
 
 		$this->isWikia = $this->getOption( 'wikia' );
+		if ( !$this->isWikia && preg_match( '/\.(fandom|wikia|gamepedia)\.com/',  $this->getOption( 'url', '' ) ) ) {
+			$this->output( "--wikia was not set but detected from URL - enabling the flag anyway\n" );
+			$this->isWikia = true;
+		}
 
 		$services = MediaWikiServices::getInstance();
 		$this->localRepo = $services->getRepoGroup()->getLocalRepo();
@@ -363,7 +367,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$this->output( sprintf( " File from URL %s doesn't match the expected sha1. Expected: %s. Actual: %s\n",
 				$fileurl, $sha1, $storedSha1 ) );
 
-			if ( $this->getOption( 'ignore-sha' ) ) {
+			if ( $this->getOption( 'ignore-sha' ) || $this->isWikia ) {
 				// we have already logged the SHA mismatch, but we'll proceed regardless since we are ignoring them
 				return $status;
 			} else {
