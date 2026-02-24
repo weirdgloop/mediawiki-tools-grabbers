@@ -64,10 +64,13 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$this->addOption( 'url', 'URL to the target wiki\'s api.php', true /* required? */, true /* withArg */, 'u' );
 		$this->addOption( 'username', 'Username to log into the target wiki', false, true, 'n' );
 		$this->addOption( 'password', 'Password on the target wiki', false, true, 'p' );
+		$this->addOption( 'db', 'Database name, if we don\'t want to write to $wgDBname', false, true );
+
+		// WGL added options
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
 		$this->addOption( 'fandom-auth', 'Use Fandom\'s authentication system', false, false );
 		$this->addOption( 'fandom-app-id', 'App ID to use with Fandom\'s authentication system', false, true );
-		$this->addOption( 'db', 'Database name, if we don\'t want to write to $wgDBname', false, true );
+		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "@fandom"', false, true );
 	}
 
 	public function execute() {
@@ -198,11 +201,12 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			} elseif ( $userIdentity ) {
 				return $userIdentity;
 			} else {
-				// If a user already exists by this name, then append '@fandom' as a user can't create an account with the `@` character.
+				// If a user already exists by this name, then append a suffix as a user can't create an account with the `@` character.
 				$userIdentity = $this->actorStore->getUserIdentityByName( $name );
+				$suffix = $this->getOption( 'actor-conflict-suffix', '@conflict' );
 				if ( $userIdentity ) {
-					$this->output( "Notice: The user name $name is already in use, using $name@fandom for ID $id instead.\n" );
-					$this->userMappings[$id] = $name = $name . '@fandom';
+					$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $id instead.\n" );
+					$this->userMappings[$id] = $name = $name . $suffix;
 				}
 			}
 		}
