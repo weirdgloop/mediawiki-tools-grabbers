@@ -69,7 +69,6 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		// WGL added options
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
 		$this->addOption( 'fandom-auth', 'Use Fandom\'s authentication system', false, false );
-		$this->addOption( 'fandom-app-id', 'App ID to use with Fandom\'s authentication system', false, true );
 		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "@fandom"', false, true );
 	}
 
@@ -84,7 +83,6 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$user = $this->getOption( 'username' );
 		$password = $this->getOption( 'password' );
 		$useragent = $this->getOption( 'useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' );
-		$fandomAppId = $this->getOption( 'fandom-app-id', '1234' );
 
 		# bot class and log in if requested
 		if ( $user && $password ) {
@@ -97,7 +95,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$this->hasOption( 'fandom-auth' )
 			);
 			if ( $this->getOption( 'fandom-auth' ) ) {
-				$error = $this->bot->fandom_login( $fandomAppId );
+				$error = $this->bot->fandom_login();
 			} else {
 				$error = $this->bot->login();
 			}
