@@ -240,9 +240,7 @@ class MediaWikiBot {
 		$data = $this->curl_post( 'https://services.fandom.com/mobile-fandom-app/fandom-auth/login', [
 			'username' => USERNAME,
 			'password' => PASSWORD,
-		], null,
-			'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
-		);
+		] );
 		$responseCode = curl_getinfo( $this->ch, CURLINFO_RESPONSE_CODE );
 		if ( $responseCode !== 200 ) {
 			return [
@@ -350,7 +348,7 @@ class MediaWikiBot {
 		# support Fandom auth
 		if ( $this->fandomAuth ) {
 			curl_setopt( $this->ch, CURLOPT_HTTPHEADER, [
-				'X-Requested-With' => $this->requestedWith,
+				"X-Requested-With: {$this->requestedWith}",
 			] );
 		}
 
@@ -368,7 +366,7 @@ class MediaWikiBot {
 
 	/** Execute curl post
 	 */
-	private function curl_post( $url, $params = '', $multipart = false, $ua = null ) {
+	private function curl_post( $url, $params = '', $multipart = false ) {
 		# set the format if not specified
 		if ( empty( $params['format'] ) ) {
 			$params['format'] = FORMAT;
@@ -376,7 +374,7 @@ class MediaWikiBot {
 		curl_reset( $this->ch );
 		# set the url, number of POST vars, POST data
 		curl_setopt( $this->ch, CURLOPT_URL, $url );
-		curl_setopt( $this->ch, CURLOPT_USERAGENT, $ua ?? USERAGENT );
+		curl_setopt( $this->ch, CURLOPT_USERAGENT, USERAGENT );
 		curl_setopt( $this->ch, CURLOPT_RETURNTRANSFER, 1 );
 		curl_setopt( $this->ch, CURLOPT_ENCODING, '' );
 		curl_setopt( $this->ch, CURLOPT_FAILONERROR, 1 );
@@ -403,7 +401,7 @@ class MediaWikiBot {
 		# support Fandom auth
 		if ( $this->fandomAuth ) {
 			curl_setopt( $this->ch, CURLOPT_HTTPHEADER, [
-				'X-Requested-With' => $this->requestedWith,
+				"X-Requested-With: {$this->requestedWith}",
 			] );
 		}
 		curl_setopt( $this->ch, CURLOPT_POST, count( $params ) );
