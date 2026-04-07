@@ -14,6 +14,7 @@ use GuzzleHttp\Psr7\LazyOpenStream;
 use MediaWiki\FileRepo\LocalRepo;
 use MediaWiki\MediaWikiServices;
 use Wikimedia\Mime\MimeAnalyzer;
+use Wikimedia\Timestamp\TimestampFormat;
 
 require_once 'ExternalWikiGrabber.php';
 
@@ -155,6 +156,88 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 
 		$this->output( "Done\n" );
 		return $status;
+	}
+
+	/**
+	 * @param array<string, array<string, mixed>> $files file name => file data
+	 * @return StatusValue[]
+	 * @throws Exception
+	 */
+	protected function newUploads( array $files ): array {
+		// TODO include oldUpload in this method
+		$names = implode( ', ', array_keys( $files ) );
+		$this->output( "Uploading $names...\n" );
+
+		$result = [];
+		$filesToStore = [];
+		$rows = [];
+		foreach ( $files as $fileName => $fileInfo ) {
+			if ( !isset( $fileInfo['url'] ) ) {
+				$this->output( "File $fileName is suppressed, skipping it\n" );
+				$result[$fileName] = StatusValue::newFatal( new RawMessage( 'SKIPPED' ) );
+				continue;
+			}
+
+			$fileUrl = $this->sanitiseUrl( $fileInfo['url'] );
+			$comment = $fileInfo['comment'] ?: '';
+			$mime = $fileInfo['mime'];
+			$mimeBreak = strpos( $mime, '/' );
+			$actor = $this->getActorFromUser( (int)$fileInfo['userid'], $fileInfo['user'] );
+			$commentFields = $this->commentStore->insert( $this->dbw, 'img_description', $comment );
+
+			$rows[$fileName] = [
+				'img_name' => $fileName,
+				'img_size' => $fileInfo['size'],
+				'img_width' => $fileInfo['width'],
+				'img_height' => $fileInfo['height'],
+				'img_bits' => $fileInfo['bitdepth'],
+				'img_actor' => $actor,
+				'img_timestamp' => wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ),
+				'img_media_type' => $fileInfo['mediatype'],
+				'img_sha1' => Wikimedia\base_convert( $fileInfo['sha1'], 16, 36, 31 ),
+				'img_metadata' => serialize( [] ),
+				'img_major_mime' => substr( $mime, 0, $mimeBreak ),
+				'img_minor_mime' => substr( $mime, $mimeBreak + 1 ),
+			] + $commentFields;
+			$filesToStore[$fileName] = [
+				'fileUrl' => $fileUrl,
+				'sha1' => $fileInfo['sha1'],
+			];
+		}
+
+		$existingFiles = $this->dbw->newSelectQueryBuilder()
+			->select( 'img_name' )
+			->from( 'image' )
+			->where( [ 'img_name' => array_keys( $rows ) ] )
+			->caller( __METHOD__ )
+			->fetchFieldValues();
+
+		foreach ( $filesToStore as $fileName => $_ ) {
+			if ( in_array( $fileName, $existingFiles ) ) {
+				$this->output( "$fileName already exists in image table...\n" );
+				unset( $rows[$fileName] );
+			}
+		}
+
+		$this->dbw->newInsertQueryBuilder()
+			->insertInto( 'image' )
+			->rows( array_values( $rows ) )
+			->caller( __METHOD__ )
+			->execute();
+
+		$amount = count( $rows );
+		$this->output( "Inserted $amount rows into the image table.\n" );
+
+		$storeResults = $this->storeFilesFromURLs( $filesToStore );
+		foreach ( $storeResults as $fileName => $status ) {
+			if ( $status->isOK() ) {
+				$file = $this->localRepo->newFile( $fileName );
+				$file->upgradeRow();
+			}
+		}
+
+		$this->output( "Batch done\n" );
+		return array_merge( $result, $storeResults );
 	}
 
 	/**
@@ -359,7 +442,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 
 			if ( $this->localRepo->fileExists( $path ) ) {
 				$eSha = $this->localRepo->getBackend()->getFileStat( [
-					'src' => $path, 'latest' => 1, 'requireSHA1' => 1
+					'src' => $path, 'latest' => 1, 'requireSHA1' => 1,
 				] )['sha1'];
 				if ( $eSha === $fileData['sha1'] ) {
 					$results[$fileName] = StatusValue::newGood();
