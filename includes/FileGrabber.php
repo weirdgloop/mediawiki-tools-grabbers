@@ -11,6 +11,7 @@
  */
 
 use GuzzleHttp\Psr7\LazyOpenStream;
+use MediaWiki\FileRepo\File\File;
 use MediaWiki\FileRepo\LocalRepo;
 use MediaWiki\MediaWikiServices;
 use Wikimedia\Mime\MimeAnalyzer;
@@ -159,18 +160,149 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	}
 
 	/**
-	 * @param array<string, array<string, mixed>> $files file name => file data
+	 * Process and upload both new and old files.
+	 *
+	 * @param array<string, array<string, mixed>> $newFiles file name => file data
+	 * @param array<string, array<string, mixed>> $oldFiles file name => file data
 	 * @return StatusValue[]
 	 * @throws Exception
 	 */
-	protected function newUploads( array $files ): array {
-		// TODO include oldUpload in this method
-		$names = implode( ', ', array_keys( $files ) );
+	protected function uploadFiles( array $newFiles, array $oldFiles ): array {
+		// TODO Print timestamps for old files?
+		$names = implode( ', ', array_unique( array_keys( $newFiles ), array_keys( $oldFiles ) ) );
 		$this->output( "Uploading $names...\n" );
 
 		$result = [];
-		$filesToStore = [];
+		$filesToStore = array_merge(
+			$this->processNewFiles( $newFiles, $result ),
+			$this->processOldFiles( $oldFiles, $result ),
+		);
+
+		$storeResults = $this->storeFilesFromURLs( $filesToStore );
+		foreach ( $storeResults as $fileName => $status ) {
+			if ( $status->isOK() ) {
+				if ( array_key_exists( $fileName, $oldFiles ) ) {
+					$file = $this->localRepo->newFromArchiveName( $fileName, $oldFiles[$fileName]['archivename'] );
+				} else {
+					$file = $this->localRepo->newFile( $fileName );
+				}
+				$file->upgradeRow();
+			}
+		}
+
+		$this->output( "Batch done\n" );
+		return array_merge( $result, $storeResults );
+	}
+
+	/**
+	 * @param array<string, array<string, mixed>> $files
+	 * @param StatusValue[] &$result
+	 * @return array<string, array{fileUrl:string,sha1:string,archiveName:string}>
+	 */
+	protected function processOldFiles( array $files, array &$result ): array {
+		$this->output( 'Processing ' . count( $files ) . ' old files...' );
 		$rows = [];
+		$filesToStore = [];
+		foreach ( $files as $fileName => $fileInfo ) {
+			// TODO merge this part with processNewFiles
+			if ( !isset( $fileInfo['url'] ) ) {
+				$this->output( "File $fileName is suppressed, skipping it\n" );
+				$result[$fileName] = StatusValue::newFatal( new RawMessage( 'SKIPPED' ) );
+				continue;
+			}
+
+			// Sloppy handler for revdeletions; just fills them in with dummy text
+			// and sets bitfield thingy
+			$fileDeleted = 0;
+			if ( isset( $fileInfo['userhidden'] ) ) {
+				$fileDeleted |= File::DELETED_USER;
+				if ( !isset( $fileInfo['user'] ) ) {
+					// Username removed
+					$fileInfo['user'] = '';
+				}
+				if ( !isset( $fileInfo['userid'] ) ) {
+					$fileInfo['userid'] = 0;
+				}
+			}
+			if ( isset( $fileInfo['commenthidden'] ) ) {
+				$fileDeleted |= File::DELETED_COMMENT;
+				// Edit summary removed
+				$comment = '';
+			} else {
+				$comment = $fileInfo['comment'] ?: '';
+			}
+			if ( isset( $fileInfo['filehidden'] ) ) {
+				$fileDeleted |= File::DELETED_FILE;
+			}
+			if ( isset( $fileInfo['suppressed'] ) ) {
+				$fileDeleted |= File::DELETED_RESTRICTED;
+			}
+
+			$fileUrl = $this->sanitiseUrl( $fileInfo['url'] );
+			$mime = $fileInfo['mime'];
+			$mimeBreak = strpos( $mime, '/' );
+			$commentFields = $this->commentStore->insert( $this->dbw, 'oi_description', $comment );
+
+			$row = [
+				'oi_name' => $fileName,
+				'oi_archive_name' => $fileInfo['archivename'],
+				'oi_size' => $fileInfo['size'],
+				'oi_width' => $fileInfo['width'],
+				'oi_height' => $fileInfo['height'],
+				'oi_bits' => $fileInfo['bitdepth'],
+				'oi_actor' => $this->getActorFromUser( (int)$fileInfo['userid'], $fileInfo['user'] ),
+				'oi_timestamp' => wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ),
+				'oi_media_type' => $fileInfo['mediatype'],
+				'oi_deleted' => $fileDeleted,
+				'oi_sha1' => Wikimedia\base_convert( $fileInfo['sha1'], 16, 36, 31 ),
+				'oi_metadata' => serialize( [] ),
+				'oi_major_mime' => substr( $mime, 0, $mimeBreak ),
+				'oi_minor_mime' => substr( $mime, $mimeBreak + 1 ),
+			] + $commentFields;
+
+			$historyExists = $this->dbw->newSelectQueryBuilder()
+				->select( '1' )
+				->from( 'oldimage' )
+				->where( [
+					'oi_name' => $row['oi_name'],
+					'oi_archive_name' => $row['oi_archive_name'],
+					'oi_timestamp' => $row['oi_timestamp'],
+				] )
+				->caller( __METHOD__ )
+				->fetchField();
+
+			if ( !$historyExists ) {
+				$rows[$fileName] = $row;
+			}
+
+			$filesToStore[$fileName] = [
+				'fileUrl' => $fileUrl,
+				'sha1' => $fileInfo['sha1'],
+				'archiveName' => $fileInfo['archivename'],
+			];
+		}
+
+		$this->dbw->newInsertQueryBuilder()
+			->insertInto( 'oldimage' )
+			->rows( array_values( $rows ) )
+			->caller( __METHOD__ )
+			->execute();
+
+		$amount = count( $rows );
+		$this->output( "Inserted $amount rows into the oldimage table.\n" );
+
+		return $filesToStore;
+	}
+
+	/**
+	 * @param array<string, array<string, mixed>> $files
+	 * @param StatusValue[] &$result
+	 * @return array<string, array{fileUrl:string,sha1:string}>
+	 */
+	protected function processNewFiles( array $files, array &$result ): array {
+		$this->output( 'Processing ' . count( $files ) . ' new files...' );
+		$rows = [];
+		$filesToStore = [];
 		foreach ( $files as $fileName => $fileInfo ) {
 			if ( !isset( $fileInfo['url'] ) ) {
 				$this->output( "File $fileName is suppressed, skipping it\n" );
@@ -228,16 +360,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$amount = count( $rows );
 		$this->output( "Inserted $amount rows into the image table.\n" );
 
-		$storeResults = $this->storeFilesFromURLs( $filesToStore );
-		foreach ( $storeResults as $fileName => $status ) {
-			if ( $status->isOK() ) {
-				$file = $this->localRepo->newFile( $fileName );
-				$file->upgradeRow();
-			}
-		}
-
-		$this->output( "Batch done\n" );
-		return array_merge( $result, $storeResults );
+		return $filesToStore;
 	}
 
 	/**
