@@ -127,7 +127,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'img_sha1' => $file_e['sha1'],
 			'img_metadata' => $file_e['metadata'],
 			'img_major_mime' => $file_e['major_mime'],
-			'img_minor_mime' => $file_e['minor_mime']
+			'img_minor_mime' => $file_e['minor_mime'],
 		] + $commentFields;
 
 		$rowExists = $this->dbw->selectField(
@@ -247,7 +247,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'oi_sha1' => $file_e['sha1'],
 			'oi_metadata' => $file_e['metadata'],
 			'oi_major_mime' => $file_e['major_mime'],
-			'oi_minor_mime' => $file_e['minor_mime']
+			'oi_minor_mime' => $file_e['minor_mime'],
 		] + $commentFields;
 
 		$historyExists = $this->dbw->selectField(
@@ -336,6 +336,164 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		}
 		unlink( $tmpPath );
 		return $status;
+	}
+
+	/**
+	 * @param array<string, array{fileUrl:string,sha1:string,archiveName?:string}> $files
+	 * @return StatusValue[]
+	 * @throws Exception
+	 */
+	protected function storeFilesFromURLs( array $files ): array {
+		$results = [];
+		$filesToDownload = [];
+		$paths = [];
+
+		foreach ( $files as $fileName => $fileData ) {
+			// Check for existing file in repo. Can't use LocalFile/OldLocalFile as that uses the DB.
+			$archiveName = $fileData['archiveName'] ?? null;
+			if ( $archiveName ) {
+				$path = $this->localRepo->getZonePath( 'public' ) . "/archive/$archiveName";
+			} else {
+				$path = $this->localRepo->getZonePath( 'public' ) . "/$fileName";
+			}
+
+			if ( $this->localRepo->fileExists( $path ) ) {
+				$eSha = $this->localRepo->getBackend()->getFileStat( [
+					'src' => $path, 'latest' => 1, 'requireSHA1' => 1
+				] )['sha1'];
+				if ( $eSha === $fileData['sha1'] ) {
+					$results[$fileName] = StatusValue::newGood();
+					continue;
+				} else {
+					$this->output( " File $fileName doesn't match expected sha1.\n", $fileName );
+					$this->localRepo->quickPurge( $path );
+				}
+			} else {
+				$this->output( " File $fileName doesn't exist in the local file repo.\n" );
+			}
+			$paths[$fileName] = $path;
+
+			$filesToDownload[$fileName] = [
+				'fileUrl' => $fileData['fileUrl'],
+				'targetTempFile' => tempnam( wfTempDir(), 'grabfile' ),
+				'relatedFileName' => $fileName,
+				'sha1' => $fileData['sha1'],
+			];
+		}
+
+		$maxRetries = 3;
+		$retries = 0;
+		while ( $filesToDownload ) {
+			if ( $retries < 0 ) {
+				sleep( 5 * $retries );
+			}
+			if ( $retries >= $maxRetries ) {
+				// Add failures from the last attempt to the results, if there are any
+				$results = array_merge( $results, $downloadResults ?? [] );
+				break;
+			}
+
+			// Attempt to download the files, store all successful results and retry only those that failed
+			$downloadResults = $this->downloadFiles( $filesToDownload );
+			$successfulDownloads = array_filter( $downloadResults, static fn ( $s ) => $s->isOK() );
+			$results = array_merge( $results, $successfulDownloads );
+			$filesToDownload = array_diff_key( $filesToDownload, $successfulDownloads );
+			$retries++;
+		}
+
+		foreach ( $results as $fileName => $status ) {
+			if ( $status->isOK() ) {
+				$importStatus = $this->localRepo->quickImport( $status->getValue(), $paths[$fileName] );
+				if ( !$importStatus->isOK() ) {
+					$errors = array_map(
+						static fn ( $msg ) => wfMessage( $msg )->text(),
+						$importStatus->getMessages( 'error' )
+					);
+					$formattedErrors = implode( "\n", $errors );
+					$this->output( " Error when publishing file $fileName to the local file repo: $formattedErrors\n" );
+					$status->merge( $importStatus );
+				}
+			} else {
+				$url = $files[$fileName]['fileUrl'];
+				$this->output( " Failed to save file $fileName from URL $url\n" );
+			}
+			unlink( $status->getValue() );
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Download multiple files concurrently.
+	 * Array keys in the input array will be preserved in the returned array.
+	 * @param array<string, array{fileUrl:string,targetTempFile:string,relatedFileName:string,sha1?:string}> $files
+	 * @return StatusValue<string>[] Statuses with the temporary file paths as their values
+	 * @throws Exception
+	 */
+	protected function downloadFiles( array $files, bool $enableCacheBuster = true ): array {
+		$client = $this->getServiceContainer()->getHttpRequestFactory()->createMultiClient( [
+			'reqTimeout' => 90,
+		] );
+
+		$responses = $client->runMulti( array_map( function ( $options ) use ( $enableCacheBuster ) {
+			$url = $options['fileUrl'];
+			if ( $enableCacheBuster ) {
+				$time = time();
+				// Add a cache buster to get the latest version of a file.
+				// Fandom uses 'cb' already so we'll use 'purge'.
+				if ( str_contains( $url, '?' ) ) {
+					$url .= "&purge=$time";
+				} else {
+					$url .= "?purge=$time";
+				}
+			}
+
+			return [
+				'url' => $url,
+				'stream' => new LazyOpenStream( $options['targetTempFile'], 'w' ),
+				'headers' => [
+					'Accept' => $this->getRelevantAcceptHeader( $options['relatedFileName'] ),
+				],
+			];
+		}, $files ) );
+
+		$statuses = [];
+		foreach ( $responses as $key => $response ) {
+			$fileUrl = $files[$key]['fileUrl'];
+			$status = StatusValue::newGood( $files[$key]['targetTempFile'] );
+
+			if ( isset( $response['error'] ) ) {
+				$status->fatal( $response['error'] );
+			}
+			if ( isset( $response['reason'] ) ) {
+				$status->fatal( $response['reason'] );
+			}
+
+			if ( !$status->isOK() ) {
+				$errors = array_map(
+					static fn ( $msg ) => wfMessage( $msg )->text(),
+					$status->getMessages( 'error' )
+				);
+				$formattedErrors = implode( "\n", $errors );
+				$this->output( " Error when saving contents of URL $fileUrl: $formattedErrors\n" );
+			}
+
+			if ( $status->isOK() && isset( $files[$key]['sha1'] ) ) {
+				$sha1 = $files[$key]['sha1'];
+				$storedSha1 = sha1_file( $files[$key]['targetTempFile'] );
+				if ( $storedSha1 !== $sha1 ) {
+					$this->output( " File from URL $fileUrl doesn't match the expected sha1." );
+					$this->output( " Expected: $sha1. Actual: $storedSha1\n" );
+
+					if ( !$this->getOption( 'ignore-sha' ) && !$this->isWikia ) {
+						$status->fatal( new RawMessage( 'FILECORRUPT' ) );
+					}
+				}
+			}
+
+			$statuses[$key] = $status;
+		}
+		return $statuses;
 	}
 
 	/**
@@ -468,16 +626,24 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 * @param string $relatedFileName File name hint to extract file extension
 	 */
 	private function setRelevantAcceptHeader( $req, $relatedFileName ) {
-		if ( !$relatedFileName ) {
+		$value = $this->getRelevantAcceptHeader( $relatedFileName );
+		if ( $value === null ) {
 			return;
+		}
+		$req->setHeader( 'Accept', $value );
+	}
+
+	private function getRelevantAcceptHeader( $relatedFileName ): ?string {
+		if ( !$relatedFileName ) {
+			return null;
 		}
 		$bits = explode( '.', $relatedFileName );
 		$ext = array_pop( $bits );
 		$mime = $this->mimeAnalyzer->getMimeTypeFromExtensionOrNull( $ext );
 		if ( !$mime ) {
-			return;
+			return null;
 		}
 		# Use the expected mime type first, or anything as a fallback
-		$req->setHeader( 'Accept', "$mime,*/*;q=0.8" );
+		return "$mime,*/*;q=0.8";
 	}
 }
