@@ -169,8 +169,9 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 */
 	protected function uploadFiles( array $newFiles, array $oldFiles ): array {
 		// TODO Print timestamps for old files?
-		$names = implode( ', ', array_unique( array_keys( $newFiles ), array_keys( $oldFiles ) ) );
+		$names = implode( ', ', array_unique( array_merge( array_keys( $newFiles ), array_keys( $oldFiles ) ) ) );
 		$this->output( "Uploading $names...\n" );
+		$this->output( '(' . count( $newFiles ) + count( $oldFiles ) . " files)\n" );
 
 		$result = [];
 		$filesToStore = array_merge(
@@ -282,11 +283,13 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			];
 		}
 
-		$this->dbw->newInsertQueryBuilder()
-			->insertInto( 'oldimage' )
-			->rows( array_values( $rows ) )
-			->caller( __METHOD__ )
-			->execute();
+		if ( $rows ) {
+			$this->dbw->newInsertQueryBuilder()
+				->insertInto( 'oldimage' )
+				->rows( array_values( $rows ) )
+				->caller( __METHOD__ )
+				->execute();
+		}
 
 		$amount = count( $rows );
 		$this->output( "Inserted $amount rows into the oldimage table.\n" );
@@ -337,26 +340,29 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			];
 		}
 
-		$existingFiles = $this->dbw->newSelectQueryBuilder()
-			->select( 'img_name' )
-			->from( 'image' )
-			->where( [ 'img_name' => array_keys( $rows ) ] )
-			->caller( __METHOD__ )
-			->fetchFieldValues();
+		if ( $rows ) {
+			$existingFiles = $this->dbw->newSelectQueryBuilder()
+				->select( 'img_name' )
+				->from( 'image' )
+				->where( [ 'img_name' => array_keys( $rows ) ] )
+				->caller( __METHOD__ )
+				->fetchFieldValues();
 
-		foreach ( $filesToStore as $fileName => $_ ) {
-			if ( in_array( $fileName, $existingFiles ) ) {
-				$this->output( "$fileName already exists in image table...\n" );
-				unset( $rows[$fileName] );
+			foreach ( $filesToStore as $fileName => $_ ) {
+				if ( in_array( $fileName, $existingFiles ) ) {
+					$this->output( "$fileName already exists in image table...\n" );
+					unset( $rows[$fileName] );
+				}
+			}
+
+			if ( $rows ) {
+				$this->dbw->newInsertQueryBuilder()
+					->insertInto( 'image' )
+					->rows( array_values( $rows ) )
+					->caller( __METHOD__ )
+					->execute();
 			}
 		}
-
-		$this->dbw->newInsertQueryBuilder()
-			->insertInto( 'image' )
-			->rows( array_values( $rows ) )
-			->caller( __METHOD__ )
-			->execute();
-
 		$amount = count( $rows );
 		$this->output( "Inserted $amount rows into the image table.\n" );
 
@@ -566,8 +572,8 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			if ( $this->localRepo->fileExists( $path ) ) {
 				$eSha = $this->localRepo->getBackend()->getFileStat( [
 					'src' => $path, 'latest' => 1, 'requireSHA1' => 1,
-				] )['sha1'];
-				if ( $eSha === $fileData['sha1'] ) {
+				] )['sha1'] ?? null;
+				if ( $eSha !== null && $eSha === $fileData['sha1'] ) {
 					$results[$fileName] = StatusValue::newGood();
 					continue;
 				} else {
@@ -641,7 +647,11 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			'reqTimeout' => 90,
 		] );
 
-		$responses = $client->runMulti( array_map( function ( $options ) use ( $enableCacheBuster ) {
+		$streams = [];
+		$statuses = [];
+		$requests = [];
+		$fileNamesByUrl = [];
+		foreach ( $files as $fileName => $options ) {
 			$url = $options['fileUrl'];
 			if ( $enableCacheBuster ) {
 				$time = time();
@@ -654,19 +664,31 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				}
 			}
 
-			return [
+			$stream = fopen( $options['targetTempFile'], 'w' );
+			if ( !$stream ) {
+				$this->output( 'Failed to open temporary file ' . $options['targetTempFile'] . "!\n" );
+				$statuses[$fileName] = StatusValue::newFatal( new RawMessage( 'Failed to open temporary file!' ) );
+				continue;
+			}
+
+			$streams[$fileName] = $stream;
+			$requests[] = [
+				'method' => 'GET',
 				'url' => $url,
-				'stream' => new LazyOpenStream( $options['targetTempFile'], 'w' ),
+				'stream' => $stream,
 				'headers' => [
 					'Accept' => $this->getRelevantAcceptHeader( $options['relatedFileName'] ),
 				],
 			];
-		}, $files ) );
+			$fileNamesByUrl[$url] = $fileName;
+		}
 
-		$statuses = [];
-		foreach ( $responses as $key => $response ) {
-			$fileUrl = $files[$key]['fileUrl'];
-			$status = StatusValue::newGood( $files[$key]['targetTempFile'] );
+		$responses = $client->runMulti( $requests );
+
+		foreach ( $responses as $response ) {
+			$fileName = $fileNamesByUrl[$response['url']];
+			$fileUrl = $files[$fileName]['fileUrl'];
+			$status = StatusValue::newGood( $files[$fileName]['targetTempFile'] );
 
 			if ( isset( $response['error'] ) ) {
 				$status->fatal( $response['error'] );
@@ -684,9 +706,9 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				$this->output( " Error when saving contents of URL $fileUrl: $formattedErrors\n" );
 			}
 
-			if ( $status->isOK() && isset( $files[$key]['sha1'] ) ) {
-				$sha1 = $files[$key]['sha1'];
-				$storedSha1 = sha1_file( $files[$key]['targetTempFile'] );
+			if ( $status->isOK() && isset( $files[$fileName]['sha1'] ) ) {
+				$sha1 = $files[$fileName]['sha1'];
+				$storedSha1 = sha1_file( $files[$fileName]['targetTempFile'] );
 				if ( $storedSha1 !== $sha1 ) {
 					$this->output( " File from URL $fileUrl doesn't match the expected sha1." );
 					$this->output( " Expected: $sha1. Actual: $storedSha1\n" );
@@ -697,8 +719,13 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				}
 			}
 
-			$statuses[$key] = $status;
+			$statuses[$fileName] = $status;
 		}
+
+		foreach ( $streams as $stream ) {
+			fclose( $stream );
+		}
+
 		return $statuses;
 	}
 

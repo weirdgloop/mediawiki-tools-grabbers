@@ -12,6 +12,8 @@
  * @note Based on code by Misza, Jack Phoenix and Edward Chernenko.
  */
 
+use Wikimedia\Timestamp\TimestampFormat;
+
 require_once 'includes/FileGrabber.php';
 
 class GrabFiles extends FileGrabber {
@@ -26,6 +28,9 @@ class GrabFiles extends FileGrabber {
 		$this->addOption( 'from', 'Name of file to start from', false, true );
 		$this->addOption( 'to', 'Name of file to end at', false, true );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
+
+		// ToDo option/move
+		$this->setBatchSize( 10 );
 	}
 
 	public function execute() {
@@ -46,7 +51,7 @@ class GrabFiles extends FileGrabber {
 			'gailimit' => 'max',
 			'prop' => 'imageinfo',
 			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|archivename|bitdepth|mediatype',
-			'iilimit' => 'max'
+			'iilimit' => 'max',
 		];
 
 		$gaifrom = $this->getOption( 'from' );
@@ -69,8 +74,23 @@ class GrabFiles extends FileGrabber {
 				$this->fatalError( 'No files found...' );
 			}
 
-			foreach ( $result['query']['pages'] as $file ) {
-				$count = $count + $this->processFile( $file );
+			$files = array_merge( ...array_map( $this->flattenFileEntry( ... ), $result['query']['pages'] ) );
+
+			foreach ( array_chunk( $files, $this->getBatchSize() ) as $batch ) {
+				// TODO can we have conflicting names? e.g. for multiple versions??
+				$newFiles = array_column(
+					array_filter( $batch, static fn ( $file ) => !$file['old'] ),
+					'info',
+					'name',
+				);
+				$oldFiles = array_column(
+					array_filter( $batch, static fn ( $file ) => $file['old'] ),
+					'info',
+					'name',
+				);
+				$this->output( 'Batch-uploading ' . ( count( $newFiles ) + count( $oldFiles ) ) . " files...\n" );
+				$statuses = $this->uploadFiles( $newFiles, $oldFiles );
+				$count += count( array_filter( $statuses, static fn ( $s ) => $s->isOK() ) );
 			}
 
 			if ( isset( $result['query-continue'] ) ) {
@@ -82,6 +102,55 @@ class GrabFiles extends FileGrabber {
 			}
 		}
 		$this->output( "$count files downloaded.\n" );
+	}
+
+	/**
+	 * @param array<string, mixed> $entry
+	 * @return array{old:bool,name:string,info:array<string,mixed>}[]
+	 */
+	private function flattenFileEntry( array $entry ): array {
+		$name = $this->sanitiseTitle( $entry['ns'], $entry['title'] );
+		$this->output( "Processing $name...\n" );
+
+		if ( !$entry['imageinfo'] ) {
+			// TODO why does this happen in the new code?
+			$this->output("...no imageinfo!\n");
+			return [];
+		}
+
+		$count = 0;
+		$result = [];
+		foreach ( $entry['imageinfo'] as $fileInfo ) {
+			// Skip missing file version.
+			if ( isset( $fileInfo['filemissing'] ) ) {
+				$this->output( "Skipping missing file version...\n" );
+				continue;
+			}
+
+			// Api returns file revisions from new to old.
+			// WARNING: If a new version of a file is uploaded after the start of the script
+			// (or endDate), the file and all its previous revisions would be skipped,
+			// potentially leaving pages that were using the old image with redlinks.
+			// To prevent this, we'll skip only more recent versions, and mark the first
+			// one before the end date as the latest
+			if ( !$count && wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ) > $this->endDate ) {
+				continue;
+			}
+
+			# Check for Wikia's videos
+			if ( $this->isWikiaVideo( $fileInfo ) ) {
+				$this->output( "...this appears to be a video, skipping it.\n" );
+				return [];
+			}
+
+			$result[] = [
+				'old' => $count > 0,
+				'name' => $name,
+				'info' => $fileInfo
+			];
+		}
+
+		return $result;
 	}
 
 	/**
