@@ -139,6 +139,7 @@ class GrabFiles extends FileGrabber {
 				'name' => $name,
 				'info' => $fileInfo
 			];
+			$count++;
 		}
 
 		return $result;
