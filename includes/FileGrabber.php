@@ -657,27 +657,26 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				}
 				$importStatus = $this->localRepo->quickImport( $tempFile, $paths[$tempFile] );
 				if ( !$importStatus->isOK() ) {
-					$errors = array_map(
-						static fn ( $msg ) => wfMessage( $msg )->text(),
-						$importStatus->getMessages( 'error' )
-					);
-					$formattedErrors = implode( "\n", $errors );
+					$formattedErrors = $this->formatStatusErrors( $importStatus );
 					$this->output( " Error when publishing file to the local file repo: $formattedErrors\n" );
 					$status->merge( $importStatus );
 				}
 			} else {
-				// TODO extract formatting
-				$errors = array_map(
-					static fn ( $msg ) => wfMessage( $msg )->text(),
-					$status->getMessages( 'error' )
-				);
-				$formattedErrors = implode( "\n", $errors );
+				$formattedErrors = $this->formatStatusErrors( $status );
 				$this->output( " Failed to save file: $formattedErrors\n" );
 			}
 			unlink( $status->getValue() );
 		}
 
 		return $results;
+	}
+
+	private function formatStatusErrors( StatusValue $status ): string {
+		$errors = array_map(
+			static fn ( $msg ) => wfMessage( $msg )->text(),
+			$status->getMessages( 'error' )
+		);
+		return implode( "\n", $errors );
 	}
 
 	/**
@@ -747,11 +746,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			}
 
 			if ( !$status->isOK() ) {
-				$errors = array_map(
-					static fn ( $msg ) => wfMessage( $msg )->text(),
-					$status->getMessages( 'error' )
-				);
-				$formattedErrors = implode( "\n", $errors );
+				$formattedErrors = $this->formatStatusErrors( $status );
 				$this->output( " Error when saving contents of URL $fileUrl: $formattedErrors\n" );
 			}
 
