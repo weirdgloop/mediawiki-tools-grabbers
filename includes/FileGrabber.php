@@ -596,7 +596,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$maxRetries = 3;
 		$retries = 0;
 		while ( $filesToDownload ) {
-			if ( $retries < 0 ) {
+			if ( $retries > 0 ) {
 				sleep( 5 * $retries );
 			}
 			if ( $retries >= $maxRetries ) {
