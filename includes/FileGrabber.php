@@ -579,7 +579,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$fileName = $data['name'];
 			$fileData = $data['info'];
 			// Check for existing file in repo. Can't use LocalFile/OldLocalFile as that uses the DB.
-			$archiveName = $fileData['archiveName'] ?? null;
+			$archiveName = $fileData['archivename'] ?? null;
 			if ( $archiveName ) {
 				$path = $this->localRepo->getZonePath( 'public' ) . "/archive/$archiveName";
 			} else {
@@ -591,7 +591,11 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 					'src' => $path, 'latest' => 1, 'requireSHA1' => 1,
 				] )['sha1'] ?? null;
 				if ( $eSha !== null && $eSha === $fileData['sha1'] ) {
-					$results[] = StatusValue::newGood();
+					$results[] = [
+						'name' => $fileName,
+						'status' => StatusValue::newGood(),
+						'archiveName' => $archiveName,
+					];
 					continue;
 				} else {
 					$this->output( " File $fileName doesn't match expected sha1.\n", $fileName );
@@ -644,11 +648,12 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$retries++;
 		}
 
-		foreach ( $results as [ 'status' => $status ] ) {
+		foreach ( $results as &$res ) {
+			[ 'status' => $status ] = $res;
 			if ( $status->isOK() ) {
 				$tempFile = $status->getValue();
 				if ( isset( $archiveNames[$tempFile] ) ) {
-					$results['archiveName'] = $archiveNames[$tempFile];
+					$res['archiveName'] = $archiveNames[$tempFile];
 				}
 				$importStatus = $this->localRepo->quickImport( $tempFile, $paths[$tempFile] );
 				if ( !$importStatus->isOK() ) {
