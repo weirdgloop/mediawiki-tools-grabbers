@@ -162,16 +162,19 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	/**
 	 * Process and upload both new and old files.
 	 *
-	 * @param array<string, array<string, mixed>> $newFiles file name => file data
-	 * @param array<string, array<string, mixed>> $oldFiles file name => file data
-	 * @return StatusValue[]
+	 * @param array{name:string,info:array<string,mixed>}[] $newFiles
+	 * @param array{name:string,info:array<string,mixed>}[] $oldFiles
+	 * @return array{name:string,status:StatusValue}[]
 	 * @throws Exception
 	 */
 	protected function uploadFiles( array $newFiles, array $oldFiles ): array {
-		// TODO Print timestamps for old files?
-		$names = implode( ', ', array_unique( array_merge( array_keys( $newFiles ), array_keys( $oldFiles ) ) ) );
-		$this->output( "Uploading $names...\n" );
-		$this->output( '(' . count( $newFiles ) + count( $oldFiles ) . " files)\n" );
+		$this->output( "Starting upload:\n" );
+		foreach ( $newFiles as $file ) {
+			$this->output( " - " . $file['name'] . "\n" );
+		}
+		foreach ( $oldFiles as $file ) {
+			$this->output( " - " . $file['name'] . '(' . ( $file['info']['timestamp'] ?? 'old' ) . ")\n" );
+		}
 
 		$result = [];
 		$filesToStore = array_merge(
@@ -180,12 +183,12 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		);
 
 		$storeResults = $this->storeFilesFromURLs( $filesToStore );
-		foreach ( $storeResults as $fileName => $status ) {
-			if ( $status->isOK() ) {
-				if ( array_key_exists( $fileName, $oldFiles ) ) {
-					$file = $this->localRepo->newFromArchiveName( $fileName, $oldFiles[$fileName]['archivename'] );
+		foreach ( $storeResults as $data ) {
+			if ( $data['status']->isOK() ) {
+				if ( isset( $data['archivename'] ) ) {
+					$file = $this->localRepo->newFromArchiveName( $data['name'], $data['archivename'] );
 				} else {
-					$file = $this->localRepo->newFile( $fileName );
+					$file = $this->localRepo->newFile( $data['name'] );
 				}
 				$file->upgradeRow();
 			}
@@ -196,19 +199,22 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	}
 
 	/**
-	 * @param array<string, array<string, mixed>> $files
+	 * @param array{name:string,info:array<string,mixed>}[] $files
 	 * @param StatusValue[] &$result
-	 * @return array<string, array{fileUrl:string,sha1:string,archiveName:string}>
+	 * @return array{name:string,fileUrl:string,sha1:string,archiveName:string,info:array<string,mixed>}[]
 	 */
 	protected function processOldFiles( array $files, array &$result ): array {
 		$this->output( 'Processing ' . count( $files ) . ' old files...' );
 		$rows = [];
 		$filesToStore = [];
-		foreach ( $files as $fileName => $fileInfo ) {
-			// TODO merge this part with processNewFiles
+		foreach ( $files as [ 'name' => $fileName, 'info' => $fileInfo ] ) {
+			// TODO merge this part with processNewFiles?
 			if ( !isset( $fileInfo['url'] ) ) {
 				$this->output( "File $fileName is suppressed, skipping it\n" );
-				$result[$fileName] = StatusValue::newFatal( new RawMessage( 'SKIPPED' ) );
+				$result[] = [
+					'name' => $fileName,
+					'status' => StatusValue::newFatal( new RawMessage( 'SKIPPED' ) ),
+				];
 				continue;
 			}
 
@@ -273,20 +279,22 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				->fetchField();
 
 			if ( !$historyExists ) {
-				$rows[$fileName] = $row;
+				$rows[] = $row;
 			}
 
-			$filesToStore[$fileName] = [
+			$filesToStore[] = [
+				'name' => $fileName,
 				'fileUrl' => $fileUrl,
 				'sha1' => $fileInfo['sha1'],
 				'archiveName' => $fileInfo['archivename'],
+				'info' => $fileInfo,
 			];
 		}
 
 		if ( $rows ) {
 			$this->dbw->newInsertQueryBuilder()
 				->insertInto( 'oldimage' )
-				->rows( array_values( $rows ) )
+				->rows( $rows )
 				->caller( __METHOD__ )
 				->execute();
 		}
@@ -298,18 +306,21 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	}
 
 	/**
-	 * @param array<string, array<string, mixed>> $files
+	 * @param array{name:string,info:array<string,mixed>}[] $files
 	 * @param StatusValue[] &$result
-	 * @return array<string, array{fileUrl:string,sha1:string}>
+	 * @return array{name:string,fileUrl:string,sha1:string,info:array<string,mixed>}[]
 	 */
 	protected function processNewFiles( array $files, array &$result ): array {
 		$this->output( 'Processing ' . count( $files ) . ' new files...' );
 		$rows = [];
 		$filesToStore = [];
-		foreach ( $files as $fileName => $fileInfo ) {
+		foreach ( $files as [ 'name' => $fileName, 'info' => $fileInfo ] ) {
 			if ( !isset( $fileInfo['url'] ) ) {
 				$this->output( "File $fileName is suppressed, skipping it\n" );
-				$result[$fileName] = StatusValue::newFatal( new RawMessage( 'SKIPPED' ) );
+				$result[] = [
+					'name' => $fileName,
+					'status' => StatusValue::newFatal( new RawMessage( 'SKIPPED' ) ),
+				];
 				continue;
 			}
 
@@ -320,6 +331,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$actor = $this->getActorFromUser( (int)$fileInfo['userid'], $fileInfo['user'] );
 			$commentFields = $this->commentStore->insert( $this->dbw, 'img_description', $comment );
 
+			// Use file names as the keys, as there shouldn't be two new files with the same name
 			$rows[$fileName] = [
 				'img_name' => $fileName,
 				'img_size' => $fileInfo['size'],
@@ -334,9 +346,11 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				'img_major_mime' => substr( $mime, 0, $mimeBreak ),
 				'img_minor_mime' => substr( $mime, $mimeBreak + 1 ),
 			] + $commentFields;
-			$filesToStore[$fileName] = [
+			$filesToStore[] = [
+				'name' => $fileName,
 				'fileUrl' => $fileUrl,
 				'sha1' => $fileInfo['sha1'],
+				'info' => $fileInfo,
 			];
 		}
 
@@ -348,7 +362,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				->caller( __METHOD__ )
 				->fetchFieldValues();
 
-			foreach ( $filesToStore as $fileName => $_ ) {
+			foreach ( $filesToStore as [ 'name' => $fileName ] ) {
 				if ( in_array( $fileName, $existingFiles ) ) {
 					$this->output( "$fileName already exists in image table...\n" );
 					unset( $rows[$fileName] );
@@ -551,16 +565,19 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	}
 
 	/**
-	 * @param array<string, array{fileUrl:string,sha1:string,archiveName?:string}> $files
-	 * @return StatusValue[]
+	 * @param array{name:string,fileUrl:string,sha1:string,info:array<string,mixed>,archiveName?:string}[] $files
+	 * @return array{name:string,status:StatusValue,archiveName?:string}[]
 	 * @throws Exception
 	 */
 	protected function storeFilesFromURLs( array $files ): array {
 		$results = [];
 		$filesToDownload = [];
 		$paths = [];
+		$archiveNames = [];
 
-		foreach ( $files as $fileName => $fileData ) {
+		foreach ( $files as $data ) {
+			$fileName = $data['name'];
+			$fileData = $data['info'];
 			// Check for existing file in repo. Can't use LocalFile/OldLocalFile as that uses the DB.
 			$archiveName = $fileData['archiveName'] ?? null;
 			if ( $archiveName ) {
@@ -574,7 +591,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 					'src' => $path, 'latest' => 1, 'requireSHA1' => 1,
 				] )['sha1'] ?? null;
 				if ( $eSha !== null && $eSha === $fileData['sha1'] ) {
-					$results[$fileName] = StatusValue::newGood();
+					$results[] = StatusValue::newGood();
 					continue;
 				} else {
 					$this->output( " File $fileName doesn't match expected sha1.\n", $fileName );
@@ -583,11 +600,15 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			} else {
 				$this->output( " File $fileName doesn't exist in the local file repo.\n" );
 			}
-			$paths[$fileName] = $path;
 
-			$filesToDownload[$fileName] = [
-				'fileUrl' => $fileData['fileUrl'],
-				'targetTempFile' => tempnam( wfTempDir(), 'grabfile' ),
+			$tempFile = tempnam( wfTempDir(), 'grabfile' );
+			if ( $archiveName ) {
+				$archiveNames[$tempFile] = $archiveName;
+			}
+			$paths[$tempFile] = $path;
+			$filesToDownload[] = [
+				'fileUrl' => $fileData['url'],
+				'targetTempFile' => $tempFile,
 				'relatedFileName' => $fileName,
 				'sha1' => $fileData['sha1'],
 			];
@@ -607,27 +628,46 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 
 			// Attempt to download the files, store all successful results and retry only those that failed
 			$downloadResults = $this->downloadFiles( $filesToDownload );
-			$successfulDownloads = array_filter( $downloadResults, static fn ( $s ) => $s->isOK() );
+			$successfulDownloads = array_filter( $downloadResults, static fn ( $s ) => $s['status']->isOK() );
 			$results = array_merge( $results, $successfulDownloads );
-			$filesToDownload = array_diff_key( $filesToDownload, $successfulDownloads );
+			// Hacky...
+			$toRemove = [];
+			foreach ( $downloadResults as [ 'status' => $status ] ) {
+				if ( $status->isOK() ) {
+					$toRemove[] = $status->getValue();
+				}
+			}
+			$filesToDownload = array_filter(
+				$filesToDownload,
+				static fn ( $f ) => !in_array( $f['targetTempFile'], $toRemove )
+			);
 			$retries++;
 		}
 
-		foreach ( $results as $fileName => $status ) {
+		foreach ( $results as [ 'status' => $status ] ) {
 			if ( $status->isOK() ) {
-				$importStatus = $this->localRepo->quickImport( $status->getValue(), $paths[$fileName] );
+				$tempFile = $status->getValue();
+				if ( isset( $archiveNames[$tempFile] ) ) {
+					$results['archiveName'] = $archiveNames[$tempFile];
+				}
+				$importStatus = $this->localRepo->quickImport( $tempFile, $paths[$tempFile] );
 				if ( !$importStatus->isOK() ) {
 					$errors = array_map(
 						static fn ( $msg ) => wfMessage( $msg )->text(),
 						$importStatus->getMessages( 'error' )
 					);
 					$formattedErrors = implode( "\n", $errors );
-					$this->output( " Error when publishing file $fileName to the local file repo: $formattedErrors\n" );
+					$this->output( " Error when publishing file to the local file repo: $formattedErrors\n" );
 					$status->merge( $importStatus );
 				}
 			} else {
-				$url = $files[$fileName]['fileUrl'];
-				$this->output( " Failed to save file $fileName from URL $url\n" );
+				// TODO extract formatting
+				$errors = array_map(
+					static fn ( $msg ) => wfMessage( $msg )->text(),
+					$status->getMessages( 'error' )
+				);
+				$formattedErrors = implode( "\n", $errors );
+				$this->output( " Failed to save file: $formattedErrors\n" );
 			}
 			unlink( $status->getValue() );
 		}
@@ -638,8 +678,8 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	/**
 	 * Download multiple files concurrently.
 	 * Array keys in the input array will be preserved in the returned array.
-	 * @param array<string, array{fileUrl:string,targetTempFile:string,relatedFileName:string,sha1?:string}> $files
-	 * @return StatusValue<string>[] Statuses with the temporary file paths as their values
+	 * @param array{fileUrl:string,targetTempFile:string,relatedFileName:string,sha1?:string}[] $files
+	 * @return array{name:string,status:StatusValue}[]
 	 * @throws Exception
 	 */
 	protected function downloadFiles( array $files, bool $enableCacheBuster = true ): array {
@@ -648,10 +688,10 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		] );
 
 		$streams = [];
-		$statuses = [];
+		$results = [];
 		$requests = [];
-		$fileNamesByUrl = [];
-		foreach ( $files as $fileName => $options ) {
+		$fileOptionsByUrl = [];
+		foreach ( $files as $options ) {
 			$url = $options['fileUrl'];
 			if ( $enableCacheBuster ) {
 				$time = time();
@@ -666,12 +706,16 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 
 			$stream = fopen( $options['targetTempFile'], 'w' );
 			if ( !$stream ) {
-				$this->output( 'Failed to open temporary file ' . $options['targetTempFile'] . "!\n" );
-				$statuses[$fileName] = StatusValue::newFatal( new RawMessage( 'Failed to open temporary file!' ) );
+				$results[] = [
+					'name' => $options['relatedFileName'],
+					'status' => StatusValue::newFatal( new RawMessage(
+						"Failed to open temporary file {$options['targetTempFile']} for {$options['relatedFileName']}!"
+					) ),
+				];
 				continue;
 			}
 
-			$streams[$fileName] = $stream;
+			$streams[] = $stream;
 			$requests[] = [
 				'method' => 'GET',
 				'url' => $url,
@@ -680,15 +724,15 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 					'Accept' => $this->getRelevantAcceptHeader( $options['relatedFileName'] ),
 				],
 			];
-			$fileNamesByUrl[$url] = $fileName;
+			$fileOptionsByUrl[$url] = $options;
 		}
 
 		$responses = $client->runMulti( $requests );
 
 		foreach ( $responses as $response ) {
-			$fileName = $fileNamesByUrl[$response['url']];
-			$fileUrl = $files[$fileName]['fileUrl'];
-			$status = StatusValue::newGood( $files[$fileName]['targetTempFile'] );
+			$options = $fileOptionsByUrl[$response['url']];
+			$fileUrl = $options['fileUrl'];
+			$status = StatusValue::newGood( $options['targetTempFile'] );
 
 			if ( isset( $response['error'] ) ) {
 				$status->fatal( $response['error'] );
@@ -706,9 +750,9 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				$this->output( " Error when saving contents of URL $fileUrl: $formattedErrors\n" );
 			}
 
-			if ( $status->isOK() && isset( $files[$fileName]['sha1'] ) ) {
-				$sha1 = $files[$fileName]['sha1'];
-				$storedSha1 = sha1_file( $files[$fileName]['targetTempFile'] );
+			if ( $status->isOK() && isset( $options['sha1'] ) ) {
+				$sha1 = $options['sha1'];
+				$storedSha1 = sha1_file( $options['targetTempFile'] );
 				if ( $storedSha1 !== $sha1 ) {
 					$this->output( " File from URL $fileUrl doesn't match the expected sha1." );
 					$this->output( " Expected: $sha1. Actual: $storedSha1\n" );
@@ -719,14 +763,17 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				}
 			}
 
-			$statuses[$fileName] = $status;
+			$results[] = [
+				'name' => $options['relatedFileName'],
+				'status' => $status,
+			];
 		}
 
 		foreach ( $streams as $stream ) {
 			fclose( $stream );
 		}
 
-		return $statuses;
+		return $results;
 	}
 
 	/**

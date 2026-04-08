@@ -77,20 +77,11 @@ class GrabFiles extends FileGrabber {
 			$files = array_merge( ...array_map( $this->flattenFileEntry( ... ), $result['query']['pages'] ) );
 
 			foreach ( array_chunk( $files, $this->getBatchSize() ) as $batch ) {
-				// TODO can we have conflicting names? e.g. for multiple versions??
-				$newFiles = array_column(
-					array_filter( $batch, static fn ( $file ) => !$file['old'] ),
-					'info',
-					'name',
-				);
-				$oldFiles = array_column(
-					array_filter( $batch, static fn ( $file ) => $file['old'] ),
-					'info',
-					'name',
-				);
-				$this->output( 'Batch-uploading ' . ( count( $newFiles ) + count( $oldFiles ) ) . " files...\n" );
-				$statuses = $this->uploadFiles( $newFiles, $oldFiles );
-				$count += count( array_filter( $statuses, static fn ( $s ) => $s->isOK() ) );
+				$newFiles = array_filter( $batch, static fn ( $file ) => !$file['old'] );
+				$oldFiles = array_filter( $batch, static fn ( $file ) => $file['old'] );
+				$this->output( 'Batch-uploading ' . count( $batch ) . " files...\n" );
+				$results = $this->uploadFiles( $newFiles, $oldFiles );
+				$count += count( array_filter( $results, static fn ( $r ) => $r['status']->isOK() ) );
 			}
 
 			if ( isset( $result['query-continue'] ) ) {
@@ -114,7 +105,7 @@ class GrabFiles extends FileGrabber {
 
 		if ( !$entry['imageinfo'] ) {
 			// TODO why does this happen in the new code?
-			$this->output("...no imageinfo!\n");
+			$this->output( "...no imageinfo!\n" );
 			return [];
 		}
 
