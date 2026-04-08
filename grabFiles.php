@@ -29,7 +29,6 @@ class GrabFiles extends FileGrabber {
 		$this->addOption( 'to', 'Name of file to end at', false, true );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
 
-		// ToDo option/move
 		$this->setBatchSize( 10 );
 	}
 
@@ -143,71 +142,6 @@ class GrabFiles extends FileGrabber {
 		}
 
 		return $result;
-	}
-
-	/**
-	 * Process the information from a given file returned by the api
-	 *
-	 * @param array $entry Page data returned from the api with imageinfo
-	 * @return int Number of image revisions processed.
-	 */
-	function processFile( $entry ) {
-		$name = $this->sanitiseTitle( $entry['ns'], $entry['title'] );
-
-		# Check if file already exists.
-		# NOTE: wfFindFile() checks foreign repos too. Use local repo only
-		# newFile skips supression checks
-		/* This is being ran on an empty database, so everything should be processed.
-		$file = $this->localRepo->newFile( $name );
-		if ( $file->exists() ) {
-			return 0;
-		}
-		*/
-
-		$this->output( "Processing {$name}: " );
-		$count = 0;
-
-		foreach ( $entry['imageinfo'] as $fileVersion ) {
-			// Skip missing file version.
-			if ( isset( $fileVersion['filemissing'] ) ) {
-				$this->output( "Skipping missing file version...\n" );
-				continue;
-			}
-
-			# Api returns file revisions from new to old.
-			# WARNING: If a new version of a file is uploaded after the start of the script
-			# (or endDate), the file and all its previous revisions would be skipped,
-			# potentially leaving pages that were using the old image with redlinks.
-			# To prevent this, we'll skip only more recent versions, and mark the first
-			# one before the end date as the latest
-			if ( !$count && wfTimestamp( TS_MW, $fileVersion['timestamp'] ) > $this->endDate ) {
-				#return 0;
-				continue;
-			}
-
-			# Check for Wikia's videos
-			if ( $this->isWikiaVideo( $fileVersion ) ) {
-				$this->output( "...this appears to be a video, skipping it.\n" );
-				return 0;
-			}
-
-			if ( $count > 0 ) {
-				$status = $this->oldUpload( $name, $fileVersion );
-			} else {
-				$status = $this->newUpload( $name, $fileVersion );
-			}
-
-			if ( $status->isOK() ) {
-				$count++;
-			}
-		}
-		if ( $count == 1 ) {
-			$this->output( "1 revision\n" );
-		} else {
-			$this->output( "$count revisions\n" );
-		}
-
-		return $count;
 	}
 }
 
