@@ -110,7 +110,6 @@ class GrabFiles extends FileGrabber {
 		$this->output( "Processing $name...\n" );
 
 		if ( !$entry['imageinfo'] ) {
-			// TODO why does this happen in the new code?
 			$this->output( "...no imageinfo!\n" );
 			return [];
 		}

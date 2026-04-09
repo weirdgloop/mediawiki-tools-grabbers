@@ -208,7 +208,6 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$rows = [];
 		$filesToStore = [];
 		foreach ( $files as [ 'name' => $fileName, 'info' => $fileInfo ] ) {
-			// TODO merge this part with processNewFiles?
 			if ( !isset( $fileInfo['url'] ) ) {
 				$this->output( "File $fileName is suppressed, skipping it\n" );
 				$result[] = [
