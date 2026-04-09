@@ -204,7 +204,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 * @return array{name:string,fileUrl:string,sha1:string,archiveName:string,info:array<string,mixed>}[]
 	 */
 	protected function processOldFiles( array $files, array &$result ): array {
-		$this->output( 'Processing ' . count( $files ) . ' old files...' );
+		$this->output( 'Processing ' . count( $files ) . " old files...\n" );
 		$rows = [];
 		$filesToStore = [];
 		foreach ( $files as [ 'name' => $fileName, 'info' => $fileInfo ] ) {
@@ -311,7 +311,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 * @return array{name:string,fileUrl:string,sha1:string,info:array<string,mixed>}[]
 	 */
 	protected function processNewFiles( array $files, array &$result ): array {
-		$this->output( 'Processing ' . count( $files ) . ' new files...' );
+		$this->output( 'Processing ' . count( $files ) . " new files...\n" );
 		$rows = [];
 		$filesToStore = [];
 		foreach ( $files as [ 'name' => $fileName, 'info' => $fileInfo ] ) {
@@ -622,7 +622,9 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$retries = 0;
 		while ( $filesToDownload ) {
 			if ( $retries > 0 ) {
-				sleep( 5 * $retries );
+				$delay = 5 * $retries;
+				$this->output( "Encountered failures. Retrying and sleeping for $delay seconds...\n" );
+				sleep( $delay );
 			}
 			if ( $retries >= $maxRetries ) {
 				// Add failures from the last attempt to the results, if there are any
@@ -636,9 +638,12 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$results = array_merge( $results, $successfulDownloads );
 			// Hacky...
 			$toRemove = [];
-			foreach ( $downloadResults as [ 'status' => $status ] ) {
+			foreach ( $downloadResults as [ 'name' => $name, 'status' => $status ] ) {
 				if ( $status->isOK() ) {
 					$toRemove[] = $status->getValue();
+				} else {
+					$this->output( "Error when trying to download $name:\n" );
+					$this->error( $status );
 				}
 			}
 			$filesToDownload = array_filter(
@@ -754,7 +759,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				$sha1 = $options['sha1'];
 				$storedSha1 = sha1_file( $options['targetTempFile'] );
 				if ( $storedSha1 !== $sha1 ) {
-					$this->output( " File from URL $fileUrl doesn't match the expected sha1." );
+					$this->output( " File from URL $fileUrl doesn't match the expected sha1.\n" );
 					$this->output( " Expected: $sha1. Actual: $storedSha1\n" );
 
 					if ( !$this->getOption( 'ignore-sha' ) && !$this->isWikia ) {
