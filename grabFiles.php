@@ -80,7 +80,14 @@ class GrabFiles extends FileGrabber {
 				$oldFiles = array_filter( $batch, static fn ( $file ) => $file['old'] );
 				$this->output( 'Batch-uploading ' . count( $batch ) . " files...\n" );
 				$results = $this->uploadFiles( $newFiles, $oldFiles );
-				$count += count( array_filter( $results, static fn ( $r ) => $r['status']->isOK() ) );
+				foreach ( $results as [ 'status' => $status, 'name' => $name ] ) {
+					if ( $status->isOK() ) {
+						$count++;
+					} else {
+						$this->output( "Error occurred while processing $name:\n" );
+						$this->error( $status );
+					}
+				}
 			}
 
 			if ( isset( $result['query-continue'] ) ) {
