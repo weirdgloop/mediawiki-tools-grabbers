@@ -15,7 +15,6 @@ use MediaWiki\FileRepo\File\File;
 use MediaWiki\FileRepo\LocalRepo;
 use MediaWiki\MediaWikiServices;
 use Wikimedia\Mime\MimeAnalyzer;
-use Wikimedia\Timestamp\TimestampFormat;
 
 require_once 'ExternalWikiGrabber.php';
 
@@ -257,7 +256,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				'oi_height' => $fileInfo['height'],
 				'oi_bits' => $fileInfo['bitdepth'],
 				'oi_actor' => $this->getActorFromUser( (int)$fileInfo['userid'], $fileInfo['user'] ),
-				'oi_timestamp' => wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ),
+				'oi_timestamp' => wfTimestamp( TS_MW, $fileInfo['timestamp'] ),
 				'oi_media_type' => $fileInfo['mediatype'],
 				'oi_deleted' => $fileDeleted,
 				'oi_sha1' => Wikimedia\base_convert( $fileInfo['sha1'], 16, 36, 31 ),
@@ -338,7 +337,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 				'img_height' => $fileInfo['height'],
 				'img_bits' => $fileInfo['bitdepth'],
 				'img_actor' => $actor,
-				'img_timestamp' => wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ),
+				'img_timestamp' => wfTimestamp( TS_MW, $fileInfo['timestamp'] ),
 				'img_media_type' => $fileInfo['mediatype'],
 				'img_sha1' => Wikimedia\base_convert( $fileInfo['sha1'], 16, 36, 31 ),
 				'img_metadata' => serialize( [] ),
