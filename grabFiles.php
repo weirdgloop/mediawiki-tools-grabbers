@@ -12,8 +12,6 @@
  * @note Based on code by Misza, Jack Phoenix and Edward Chernenko.
  */
 
-use Wikimedia\Timestamp\TimestampFormat;
-
 require_once 'includes/FileGrabber.php';
 
 class GrabFiles extends FileGrabber {
@@ -129,7 +127,7 @@ class GrabFiles extends FileGrabber {
 			// potentially leaving pages that were using the old image with redlinks.
 			// To prevent this, we'll skip only more recent versions, and mark the first
 			// one before the end date as the latest
-			if ( !$count && wfTimestamp( TimestampFormat::MW, $fileInfo['timestamp'] ) > $this->endDate ) {
+			if ( !$count && wfTimestamp( TS_MW, $fileInfo['timestamp'] ) > $this->endDate ) {
 				continue;
 			}
 
