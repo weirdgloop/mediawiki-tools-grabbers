@@ -114,10 +114,11 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 			$ipHex = IPUtils::toHex( $entry['user'] );
 		}
 
+		$blockedUser = $isUser ? $this->getUserIdentity( $entry['userid'], $entry['user'] ) : null;
 		$targetData = [
 			'bt_address' => $isUser ? null : $entry['user'],
-			'bt_user' => $isUser ? $entry['userid'] : null,
-			'bt_user_text' => $isUser ? $entry['user'] : null,
+			'bt_user' => $isUser ? $blockedUser->getId() : null,
+			'bt_user_text' => $isUser ? $blockedUser->getName() : null,
 			'bt_auto' => 0,
 			'bt_range_start' => $entry['rangestart'] ?? null,
 			'bt_range_end' => $entry['rangeend'] ?? null,
