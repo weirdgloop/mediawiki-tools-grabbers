@@ -142,18 +142,13 @@ class GrabRevisions extends TextGrabber {
 			'random' => wfRandom(),
 			'touched' => wfTimestampNow(),
 			'len' => $lastRevision['size'],
-			'content_model' => null,
+			'content_model' => $lastRevision['contentmodel'],
 			'latest' => $lastRevision['revid'],
 		];
 
 		# We kind of need this to resume...
 		$this->output( "Title: {$page_e['title']} in namespace {$page_e['namespace']}\n" );
 		$title = Title::makeTitle( $page_e['namespace'], $page_e['title'] );
-
-		# Get other information from api info
-		if ( isset( $pageInfo['contentmodel'] ) ) {
-			$page_e['content_model'] = $pageInfo['contentmodel'];
-		}
 
 		# Check if page is present
 		$pageIdent = new PageIdentityValue(
