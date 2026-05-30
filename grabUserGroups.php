@@ -128,9 +128,10 @@ class GrabUserGroups extends ExternalWikiGrabber {
 			$stuff = [];
 
 			foreach ( $data['query']['allusers'] as $user ) {
+				$mappedUser = $this->getUserIdentity( $user['userid'], $user['name'] );
 				foreach ( $user['groups'] as $group ) {
 					if ( in_array( $group, $this->groups ) ) {
-						$stuff[] = [ 'ug_user' => $user['userid'], 'ug_group' => $group ];
+						$stuff[] = [ 'ug_user' => $mappedUser->getId(), 'ug_group' => $group ];
 					}
 				}
 				$userCount++;
