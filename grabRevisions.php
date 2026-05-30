@@ -151,17 +151,8 @@ class GrabRevisions extends TextGrabber {
 		$title = Title::makeTitle( $page_e['namespace'], $page_e['title'] );
 
 		# Get other information from api info
-		$defaultModel = null;
 		if ( isset( $pageInfo['contentmodel'] ) ) {
-			# This would be the most accurate way of getting the content model for a page.
-			# However it calls hooks and can be incredibly slow or cause errors
-			#$defaultModel = ContentHandler::getDefaultModelFor( $title );
-			$defaultModel = MediaWikiServices::getInstance()->getNamespaceInfo()
-				->getNamespaceContentModel( $pageInfo['ns'] ) ?? CONTENT_MODEL_WIKITEXT;
-			# Set only if not the default content model
-			if ( $defaultModel != $pageInfo['contentmodel'] ) {
-				$page_e['content_model'] = $pageInfo['contentmodel'];
-			}
+			$page_e['content_model'] = $pageInfo['contentmodel'];
 		}
 
 		# Check if page is present
