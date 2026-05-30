@@ -108,11 +108,17 @@ class GrabUserGroups extends ExternalWikiGrabber {
 			] );
 		}
 
+		$scrapableGroups = $this->getGroups();
+		if ( !$scrapableGroups ) {
+			$this->output( "No remote groups to copy.\n" );
+			return;
+		}
+
 		$params = [
 			'list' => 'allusers',
 			'aulimit' => 'max',
 			'auprop' => 'groups',
-			'augroup' => implode( '|', $this->getGroups() )
+			'augroup' => implode( '|', $scrapableGroups )
 		];
 
 		$userCount = 0;
