@@ -609,7 +609,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			}
 			$paths[$tempFile] = $path;
 			$filesToDownload[] = [
-				'fileUrl' => $fileData['url'],
+				'fileUrl' => $data['fileUrl'],
 				'targetTempFile' => $tempFile,
 				'relatedFileName' => $fileName,
 				'sha1' => $fileData['sha1'],
