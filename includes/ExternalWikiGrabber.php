@@ -13,11 +13,12 @@
 
 use MediaWiki\CommentStore\CommentStore;
 use MediaWiki\MediaWikiServices;
+use Wikimedia\Rdbms\IMaintainableDatabase;
+use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\User\ActorStore;
 use MediaWiki\User\UserIdentity;
 use MediaWiki\User\UserIdentityValue;
 use MediaWiki\User\UserNameUtils;
-use Wikimedia\Rdbms\IMaintainableDatabase;
 
 require_once __DIR__ . '/../../maintenance/Maintenance.php';
 require_once 'mediawikibot.class.php';
@@ -61,6 +62,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 */
 	protected array $userMappings = [];
 
+	private ?string $platform = null;
+
 	public function __construct() {
 		parent::__construct();
 		$this->addOption( 'url', 'URL to the target wiki\'s api.php', true /* required? */, true /* withArg */, 'u' );
@@ -69,6 +72,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$this->addOption( 'db', 'Database name, if we don\'t want to write to $wgDBname', false, true );
 
 		// WGL added options
+		$this->addOption( 'platform', 'External platform name to use for GUM if not autodetected, e.g. "fandom" or "wikigg"', false, true );
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
 		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "@fandom"', false, true );
 	}
@@ -125,6 +129,20 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$this->actorStore = $services->getActorStoreFactory()->getActorStoreForImport();
 		$this->commentStore = $services->getCommentStore();
 		$this->userNameUtils = $services->getUserNameUtils();
+
+		// WGL - GUM support
+		if ( !empty( $this->getOption( 'platform' ) ) ) {
+			$this->platform = $this->getOption( 'platform' );
+			$this->output( "Provided external platform is '$platform'.\n" );
+		} elseif ( $this->isFandom ) {
+			$this->platform = 'fandom';
+			$this->output( "Autodetected external platform is 'fandom'.\n" );
+		} elseif ( preg_match( '/\.wiki\.gg/', $url ) ) {
+			$this->platform = 'wikigg';
+			$this->output( "Autodetected external platform is 'wikigg'.\n" );
+		} elseif ( ExtensionRegistry::getInstance()->isLoaded( 'GUM' ) ) {
+			$this->error( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.', 1 );
+		}
 	}
 
 	/**
@@ -165,20 +183,20 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * Looks for an actor name in the actor table, otherwise creates the actor
 	 *  by assigning a new id
 	 *
-	 * @param int $id User id, or 0
+	 * @param int $remoteId User id, or 0
 	 * @param string $name User name or IP address
 	 */
-	function getUserIdentity( $id, $name ) {
+	function getUserIdentity( $remoteId, $name ) {
 		if ( empty( $name ) ) {
 			return $this->actorStore->getUnknownActor();
 		}
 
-		if ( !$id and !$this->userNameUtils->isIP( $name ) and !ExternalUserNames::isExternal( $name ) ) {
+		if ( !$remoteId and !$this->userNameUtils->isIP( $name ) and !ExternalUserNames::isExternal( $name ) ) {
 			# Everything that's not an IP or external, must be converted to external
 			# Old imported revisions might be assigned to anon users.
 			# We also need to prefix system users if they really have no user ID
 			$name = "imported>$name";
-		} elseif ( $id and !$this->userNameUtils->isValid( $name ) ) {
+		} elseif ( $remoteId and !$this->userNameUtils->isValid( $name ) ) {
 			# T353766: There's an edge case of apparently valid but not canonicalized usernames.
 			# For example, usernames which start with lowercase characters.
 			# Those users cause problems when this script detects a user name change,
@@ -187,31 +205,74 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			# Users with non-canonicalized names will be reported as invalid, and despite having
 			# user id on the external wiki, they'll be inserted as imported to avoid further errors
 			$name = "imported>$name";
-			$id = 0;
-		} elseif ( $id ) {
-			$name = $this->userMappings[$id] ?? $name;
-			$userIdentity = $this->actorStore->getUserIdentityByUserId( $id );
-			if ( $userIdentity && $userIdentity->getName() !== $name ) {
-				$oldname = $userIdentity->getName();
-				# Cache the new user name for uncompleted user rename.
-				$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
-				if ( $oldname !== $name ) {
-					$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
-				}
-			} elseif ( $userIdentity ) {
-				return $userIdentity;
+		}
+
+		if ( $remoteId ) {
+			if ( $this->platform ) {
+				$id = (int)$this->dbw->selectField(
+					'gum_user_platforms',
+					'gup_user',
+					[
+						'gup_platform' => $this->platform,
+						'gup_remote_id' => $remoteId,
+					],
+					__METHOD__
+				);
 			} else {
-				// If a user already exists by this name, then append a suffix as a user can't create an account with the `@` character.
-				$userIdentity = $this->actorStore->getUserIdentityByName( $name );
-				$suffix = $this->getOption( 'actor-conflict-suffix', '@conflict' );
+				$id = $remoteId;
+			}
+
+			if ( $id !== 0 ) {
+				$name = $this->userMappings[$id] ?? $name;
+				$userIdentity = $this->actorStore->getUserIdentityByUserId( $id );
 				if ( $userIdentity ) {
+					if ( $userIdentity->getName() !== $name ) {
+						$oldname = $userIdentity->getName();
+						# Cache the new user name for uncompleted user rename.
+						$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
+						if ( $oldname !== $name ) {
+							$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
+						}
+					}
+					return $userIdentity;
+				} else {
+					// TODO: How to handle? Should we create the user table entry like populateUserTable?
+					$this->error( "Desync: User '$name' ($id) found in GUM, but not user table." );
+				}
+			}
+
+			$user = User::newFromName( $name );
+			if ( !$user ) {
+				$name = "imported>$name";
+			} else {
+				// If user exists, but GUM doesn't know about it, then we have a name conflict.
+				if ( $user->isRegistered() ) {
+					$suffix = $this->getOption( 'actor-conflict-suffix', '@conflict' );
 					$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $id instead.\n" );
 					$this->userMappings[$id] = $name = $name . $suffix;
+					$user = User::newFromName( $name );
 				}
+				if ( !$user->isRegistered() ) {
+					$user->addToDatabase();
+				}
+
+				$id = $user->getId();
+				if ( $this->platform && $id !== 0 ) {
+					$this->dbw->insert(
+						'gum_user_platforms',
+						[
+							'gup_user' => $id,
+							'gup_platform' => $this->platform,
+							'gup_remote_id' => $remoteId,
+						],
+						__METHOD__
+					);
+				}
+				return $user;
 			}
 		}
 
-		$userIdentity = new UserIdentityValue( $id, $name );
+		$userIdentity = new UserIdentityValue( 0, $name );
 		$this->actorStore->acquireActorId( $userIdentity, $this->dbw );
 
 		return $userIdentity;

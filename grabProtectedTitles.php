@@ -54,7 +54,7 @@ class GrabProtectedTitles extends ExternalWikiGrabber {
 			'ptdir' => 'newer',
 			'ptend' => $endDate,
 			'ptlimit' => 'max',
-			'ptprop' => 'userid|timestamp|expiry|comment|level',
+			'ptprop' => 'user|userid|timestamp|expiry|comment|level',
 		];
 
 		if ( $startDate !== null ) {
@@ -103,7 +103,7 @@ class GrabProtectedTitles extends ExternalWikiGrabber {
 		$data = [
 			'pt_namespace' => $entry['ns'],
 			'pt_title' => $title,
-			'pt_user' => $entry['userid'] ?? 0,
+			'pt_user' => $this->getUserIdentity( (int)$entry['userid'] ?? 0, $entry['user'] ?? '' )->getId(),
 			#'pt_reason' => $entry['comment'],
 			#'pt_reason_id' => 0,
 			'pt_timestamp' => $ts,
