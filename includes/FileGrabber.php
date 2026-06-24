@@ -34,27 +34,13 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 */
 	protected $mimeAnalyzer;
 
-	/**
-	 * The target wiki is on Wikia
-	 *
-	 * @var boolean
-	 */
-	protected $isWikia;
-
 	public function __construct() {
 		parent::__construct();
-		$this->addOption( 'wikia', 'Set this param if the target wiki is on Wikia/Fandom, which needs to handle URLs in a special way', false, false );
 		$this->addOption( 'ignore-sha', 'Ignore SHA-1 checksum mismatches. May be required for CDN hosts that do image optimisations.' );
 	}
 
 	public function execute() {
 		parent::execute();
-
-		$this->isWikia = $this->getOption( 'wikia' );
-		if ( !$this->isWikia && preg_match( '/\.(fandom|wikia|gamepedia)\.com/',  $this->getOption( 'url', '' ) ) ) {
-			$this->output( "--wikia was not set but detected from URL - enabling the flag anyway\n" );
-			$this->isWikia = true;
-		}
 
 		$services = MediaWikiServices::getInstance();
 		$this->localRepo = $services->getRepoGroup()->getLocalRepo();
@@ -760,7 +746,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 					$this->output( " File from URL $fileUrl doesn't match the expected sha1.\n" );
 					$this->output( " Expected: $sha1. Actual: $storedSha1\n" );
 
-					if ( !$this->getOption( 'ignore-sha' ) && !$this->isWikia ) {
+					if ( !$this->getOption( 'ignore-sha' ) && !$this->isFandom ) {
 						$status->fatal( new RawMessage( 'FILECORRUPT' ) );
 					}
 				}
@@ -808,7 +794,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			$this->output( sprintf( " File from URL %s doesn't match the expected sha1. Expected: %s. Actual: %s\n",
 				$fileurl, $sha1, $storedSha1 ) );
 
-			if ( $this->getOption( 'ignore-sha' ) || $this->isWikia ) {
+			if ( $this->getOption( 'ignore-sha' ) || $this->isFandom ) {
 				// we have already logged the SHA mismatch, but we'll proceed regardless since we are ignoring them
 				return $status;
 			} else {
@@ -858,7 +844,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		# A better check would be to check the mediatype and for the lack
 		# of a known file extension in the title, but I don't wanna mess
 		# with regex right now. --ashley, 17 April 2016
-		if ( $this->isWikia &&
+		if ( $this->isFandom &&
 			isset( $fileVersion['mime'] ) &&
 			$fileVersion['mime'] == 'video/youtube' &&
 			isset( $fileVersion['mediatype'] ) &&
@@ -876,7 +862,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 	 * @returns string sanitised URL
 	 */
 	function sanitiseUrl( $fileurl ) {
-		if ( $this->isWikia ) {
+		if ( $this->isFandom ) {
 			# Wikia is now serving "optimised" lossy images instead of the
 			# originals. See http://community.wikia.com/wiki/Thread:1200407
 			if ( stripos( $fileurl, '.webp' ) !== false ) {

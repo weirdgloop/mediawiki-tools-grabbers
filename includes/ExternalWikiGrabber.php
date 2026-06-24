@@ -50,6 +50,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 
 	protected UserNameUtils $userNameUtils;
 
+	protected bool $isFandom = false;
+
 	/**
 	 * Array of [ userid => newname ] pairs.
 	 *
@@ -68,7 +70,6 @@ abstract class ExternalWikiGrabber extends Maintenance {
 
 		// WGL added options
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
-		$this->addOption( 'fandom-auth', 'Use Fandom\'s authentication system', false, false );
 		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "@fandom"', false, true );
 	}
 
@@ -83,6 +84,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$user = $this->getOption( 'username' );
 		$password = $this->getOption( 'password' );
 		$useragent = $this->getOption( 'useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' );
+		$this->isFandom = (bool)preg_match( '/\.(fandom|wikia|gamepedia)\.com/',  $this->getOption( 'url', '' ) );
 
 		# bot class and log in if requested
 		if ( $user && $password ) {
@@ -92,9 +94,9 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$user,
 				$password,
 				$useragent,
-				$this->hasOption( 'fandom-auth' )
+				$this->isFandom
 			);
-			if ( $this->getOption( 'fandom-auth' ) ) {
+			if ( $this->isFandom ) {
 				$error = $this->bot->fandom_login();
 			} else {
 				$error = $this->bot->login();
@@ -112,7 +114,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				'',
 				'',
 				$useragent,
-				$this->hasOption( 'fandom-auth' )
+				$this->isFandom
 			);
 		}
 

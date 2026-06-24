@@ -33,8 +33,6 @@ class GrabUserGroups extends ExternalWikiGrabber {
 		$this->addDescription( 'Grabs user group assignments from a pre-existing wiki into a new wiki.' );
 		$this->addOption( 'groups', 'Get only a specific list of groups (pipe separated list of group names, by default everything except *, user and autoconfirmed)', false, true );
 		$this->addOption( 'truncate', 'Delete existing user group assignments from the new wiki.', false, false );
-		$this->addOption( 'wikia', 'Set this param if the target wiki is on Wikia/Fandom, to automatically skip most of the global user groups that are irrelevant outside there', false, false );
-		$this->addOption( 'wgg', 'Set this param if the target wiki is on wiki.gg, to automatically skip most of the global user groups that are irrelevant outside there', false, false );
 	}
 
 	public function execute() {
@@ -57,7 +55,7 @@ class GrabUserGroups extends ExternalWikiGrabber {
 
 		$more = true;
 
-		if ( $this->getOption( 'wikia' ) ) {
+		if ( $this->isFandom ) {
 			# They have a few extra usergroups we probably don't want...
 			$this->badGroups = array_merge( $this->badGroups, [
 				'authenticated',
@@ -90,7 +88,7 @@ class GrabUserGroups extends ExternalWikiGrabber {
 			] );
 		}
 
-		if ( $this->getOption( 'wgg' ) ) {
+		if ( preg_match( '/\.wiki\.gg/',  $this->getOption( 'url', '' ) ) ) {
 			$this->badGroups = array_merge( $this->badGroups, [
 				'emailconfirmed',
 				'global-af-exempt',
