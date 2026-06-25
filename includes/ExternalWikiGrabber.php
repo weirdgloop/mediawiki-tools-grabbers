@@ -62,7 +62,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 */
 	protected array $userMappings = [];
 
-	private ?string $platform = null;
+	private string $platform = '';
 
 	public function __construct() {
 		parent::__construct();
@@ -74,7 +74,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		// WGL added options
 		$this->addOption( 'platform', 'External platform name to use for GUM if not autodetected, e.g. "fandom" or "wikigg"', false, true );
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
-		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "@fandom"', false, true );
+		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "fandom"', false, true );
 	}
 
 	public function execute() {
@@ -128,20 +128,26 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$services = MediaWikiServices::getInstance();
 		$this->actorStore = $services->getActorStoreFactory()->getActorStoreForImport();
 		$this->commentStore = $services->getCommentStore();
+		$this->userFactory = $services->getUserFactory();
 		$this->userNameUtils = $services->getUserNameUtils();
 
 		// WGL - GUM support
-		if ( !empty( $this->getOption( 'platform' ) ) ) {
-			$this->platform = $this->getOption( 'platform' );
-			$this->output( "Provided external platform is '$platform'.\n" );
-		} elseif ( $this->isFandom ) {
-			$this->platform = 'fandom';
-			$this->output( "Autodetected external platform is 'fandom'.\n" );
-		} elseif ( preg_match( '/\.wiki\.gg/', $url ) ) {
-			$this->platform = 'wikigg';
-			$this->output( "Autodetected external platform is 'wikigg'.\n" );
-		} elseif ( ExtensionRegistry::getInstance()->isLoaded( 'GUM' ) ) {
-			$this->error( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.', 1 );
+		if ( ExtensionRegistry::getInstance()->isLoaded( 'GUM' ) ) {
+			if ( !empty( $this->getOption( 'platform' ) ) ) {
+				$this->platform = $this->getOption( 'platform' );
+				$this->output( "Provided external platform is '$platform'.\n" );
+			} elseif ( $this->isFandom ) {
+				$this->platform = 'fandom';
+				$this->output( "Autodetected external platform is 'fandom'.\n" );
+			} elseif ( str_contains( $url, '.wiki.gg' ) ) {
+				$this->platform = 'wikigg';
+				$this->output( "Autodetected external platform is 'wikigg'.\n" );
+			} else {
+				$this->error( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.', 1 );
+			}
+			if ( !in_array( $this->platform, $this->getConfig()->get( 'GumRemotePlatformsConfig' ) ) ) {
+				$this->error( "The 'GUM' extension is loaded and the passed external platform '{$this->platform}' is unknown.", 1 );
+			}
 		}
 	}
 
@@ -205,10 +211,13 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			# Users with non-canonicalized names will be reported as invalid, and despite having
 			# user id on the external wiki, they'll be inserted as imported to avoid further errors
 			$name = "imported>$name";
+			$remoteId = 0;
 		}
 
+		// User creation and lookup only applies to remote registered users.
 		if ( $remoteId ) {
 			if ( $this->platform ) {
+				// Use the invalid user id 0 for missing user entries.
 				$id = (int)$this->dbw->selectField(
 					'gum_user_platforms',
 					'gup_user',
@@ -222,6 +231,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$id = $remoteId;
 			}
 
+			// If a user (mapping) exists, check if renaming is needed.
 			if ( $id !== 0 ) {
 				$name = $this->userMappings[$id] ?? $name;
 				$userIdentity = $this->actorStore->getUserIdentityByUserId( $id );
@@ -235,24 +245,31 @@ abstract class ExternalWikiGrabber extends Maintenance {
 						}
 					}
 					return $userIdentity;
-				} else {
+				} elseif ( $this->platform ) {
 					// TODO: How to handle? Should we create the user table entry like populateUserTable?
 					$this->error( "Desync: User '$name' ($id) found in GUM, but not user table." );
 				}
 			}
 
-			$user = User::newFromName( $name );
+			$user = $this->userFactory->newFromName( $name );
+			// If user creation failed, then the name is invalid, so treat the result as an imported user.
 			if ( !$user ) {
 				$name = "imported>$name";
+				$remoteId = 0;
 			} else {
 				// If user exists, but GUM doesn't know about it, then we have a name conflict.
 				if ( $user->isRegistered() ) {
-					$suffix = $this->getOption( 'actor-conflict-suffix', '@conflict' );
+					$suffix = '@' . $this->getOption( 'actor-conflict-suffix', $this->platform ?: 'conflict' );
 					$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $id instead.\n" );
-					$this->userMappings[$id] = $name = $name . $suffix;
-					$user = User::newFromName( $name );
-				}
-				if ( !$user->isRegistered() ) {
+					$name = $name . $suffix;
+					$user = $this->userFactory->newFromName( $name );
+					// Needed here so that the in-process user mapping has the correct user ID.
+					$user->addToDatabase();
+					$id = $user->getId();
+					if ( $id !== 0 ) {
+						$this->userMappings[$id] = $name;
+					}
+				} else {
 					$user->addToDatabase();
 				}
 
@@ -272,7 +289,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			}
 		}
 
-		$userIdentity = new UserIdentityValue( 0, $name );
+		$userIdentity = new UserIdentityValue( $remoteId, $name );
 		$this->actorStore->acquireActorId( $userIdentity, $this->dbw );
 
 		return $userIdentity;

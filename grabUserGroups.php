@@ -88,7 +88,7 @@ class GrabUserGroups extends ExternalWikiGrabber {
 			] );
 		}
 
-		if ( preg_match( '/\.wiki\.gg/',  $this->getOption( 'url', '' ) ) ) {
+		if ( str_contains( $this->getOption( 'url', '' ), '.wiki.gg' ) ) {
 			$this->badGroups = array_merge( $this->badGroups, [
 				'emailconfirmed',
 				'global-af-exempt',
