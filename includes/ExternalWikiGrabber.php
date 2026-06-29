@@ -13,6 +13,7 @@
 
 use MediaWiki\CommentStore\CommentStore;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\User\UserFactory;
 use Wikimedia\Rdbms\IMaintainableDatabase;
 use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\User\ActorStore;
@@ -48,6 +49,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	protected ActorStore $actorStore;
 
 	protected CommentStore $commentStore;
+
+	protected UserFactory $userFactory;
 
 	protected UserNameUtils $userNameUtils;
 
@@ -135,7 +138,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		if ( ExtensionRegistry::getInstance()->isLoaded( 'GUM' ) ) {
 			if ( !empty( $this->getOption( 'platform' ) ) ) {
 				$this->platform = $this->getOption( 'platform' );
-				$this->output( "Provided external platform is '$platform'.\n" );
+				$this->output( "Provided external platform is '$this->platform'.\n" );
 			} elseif ( $this->isFandom ) {
 				$this->platform = 'fandom';
 				$this->output( "Autodetected external platform is 'fandom'.\n" );
@@ -145,8 +148,8 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			} else {
 				$this->error( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.', 1 );
 			}
-			if ( !in_array( $this->platform, $this->getConfig()->get( 'GumRemotePlatformsConfig' ) ) ) {
-				$this->error( "The 'GUM' extension is loaded and the passed external platform '{$this->platform}' is unknown.", 1 );
+			if ( !array_key_exists( $this->platform, $this->getConfig()->get( 'GumRemotePlatformsConfig' ) ) ) {
+				$this->error( "The 'GUM' extension is loaded and the passed external platform '$this->platform' is unknown.", 1 );
 			}
 		}
 	}
