@@ -144,24 +144,38 @@ class ExternalWikiService {
 	 */
 	public function fetch( array $apiParams, bool $wasRetry = false ) {
 		$status = \MediaWiki\Status\Status::newGood();
+		$attempts = 1;
 		$req = $this->rawGet( "{$this->apiUrl}?" . http_build_query( $apiParams + [
 			'format' => 'json'
 		] ) );
-		if ( !$req->execute()->isOK() || $req->getStatus() !== 200 ) {
-			if ( $req->getStatus() === 429 ) {
-				// Rate limited, wait as long as we're required then try again
-				$retryAfter = intval( $req->getResponseHeader( 'Retry-After' ) );
-				if ( !$retryAfter ) {
-					return $status->fatal( "Rate limited but no Retry-After provided" );
+
+		while ( true ) {
+			if ( !$req->execute()->isOK() || $req->getStatus() !== 200 ) {
+				if ( $req->getStatus() === 429 ) {
+					// Rate limited, wait as long as we're required then try again
+					$retryAfter = intval( $req->getResponseHeader( 'Retry-After' ) );
+					if ( !$retryAfter ) {
+						return $status->fatal( "Rate limited but no Retry-After provided" );
+					}
+					if ( $wasRetry ) {
+						return $status->fatal( "Rate limited but we already waited and retried once" );
+					}
+					sleep( $retryAfter );
+					return $this->fetch( $apiParams, true );
 				}
-				if ( $wasRetry ) {
-					return $status->fatal( "Rate limited but we already waited and retried once" );
+				if ( $attempts >= 3 ) {
+					// If this was our third attempt, give up
+					return $status->fatal(
+						"Error: status code {$req->getStatus()}: \"{$req->getContent()}\", gave up retrying" );
 				}
-				sleep( $retryAfter );
-				return $this->fetch( $apiParams, true );
+				// Else, try again with a small exponential backoff
+				$attempts++;
+				$retry = 5 ** ( $attempts - 1 );
+				echo "Error: status code {$req->getStatus()}: \"{$req->getContent()}\", retrying after {$retry}s...\n";
+				sleep( $retry );
+			} else {
+				return $status->setResult( true, json_decode( $req->getContent(), true ) );
 			}
-			return $status->fatal( "Error: status code {$req->getStatus()}: \"{$req->getContent()}\"" );
 		}
-		return $status->setResult( true, json_decode( $req->getContent(), true ) );
 	}
 }
