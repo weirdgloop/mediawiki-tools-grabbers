@@ -97,6 +97,7 @@ class CheckRevisions extends TextGrabber {
 		$this->dry = $this->getOption( 'dry', false );
 
 		$params = [
+			'action' => 'query',
 			'list' => 'allrevisions',
 			'arvprop' => 'ids|timestamp|sha1',
 			'arvlimit' => 'max',
@@ -122,10 +123,15 @@ class CheckRevisions extends TextGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$siparams = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces'
 		];
-		$result = $this->bot->query( $siparams );
+		$req = $this->externalWikiService->fetch( $siparams );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -158,7 +164,11 @@ class CheckRevisions extends TextGrabber {
 
 		$this->output( "Checking revisions...\n" );
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch revisions: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( isset( $result['continue'] ) ) {
 				$params = array_merge( $params, $result['continue'] );
@@ -197,11 +207,16 @@ class CheckRevisions extends TextGrabber {
 
 	public function fetchRemoteRevision( $revId ) {
 		$params = [
+			'action' => 'query',
 			'prop' => 'revisions',
 			'rvprop' => 'ids|timestamp|sha1|content|contentmodel|comment|user|userid',
 			'revids' => $revId
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch revision $revId: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 
 		if ( empty( $result['query']['pages'] ) ) {
 			$this->error( "Could not fetch data for $revId on remote wiki: bad API call.\n" );

@@ -35,10 +35,15 @@ class GrabRevisions extends TextGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces|statistics'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -216,6 +221,7 @@ class GrabRevisions extends TextGrabber {
 		$this->output( "Processing pages...\n" );
 
 		$params = [
+			'action' => 'query',
 			'list' => 'allrevisions',
 			'arvlimit' => 'max',
 			'arvdir' => 'newer', // Grab old revisions first
@@ -234,7 +240,11 @@ class GrabRevisions extends TextGrabber {
 		$misserModeCount = 0;
 		$lastTimestamp = '';
 		while ( true ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch revisions: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			$pages = $result['query']['allrevisions'];
 			// Deal with miser mode

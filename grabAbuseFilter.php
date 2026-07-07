@@ -27,6 +27,7 @@ class GrabAbuseFilter extends ExternalWikiGrabber {
 		$this->output( "Working...\n" );
 
 		$params = [
+			'action' => 'query',
 			'list' => 'abusefilters',
 			'abflimit' => 'max',
 			'abfdir' => 'newer',
@@ -44,7 +45,11 @@ class GrabAbuseFilter extends ExternalWikiGrabber {
 			} else {
 				$params['abfstartid'] = $abfstartid;
 			}
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch abuse filter list: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( empty( $result['query']['abusefilters'] ) ) {
 				$this->output( "No abuse filters found...\n" );

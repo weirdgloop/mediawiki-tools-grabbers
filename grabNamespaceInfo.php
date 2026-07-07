@@ -25,10 +25,15 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 		$this->output( "\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces|namespacealiases'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		if ( !$result['query'] ) {
 			$this->fatalError( 'Got no namespaces...' );
 		}

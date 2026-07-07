@@ -361,11 +361,16 @@ abstract class TextGrabber extends ExternalWikiGrabber {
 
 		# Get current title of the existing local page ID and move it to where it belongs
 		$params = [
+			'action' => 'query',
 			'prop' => 'info',
 			'pageids' => $conflictingPageID
 		];
-		$result = $this->bot->query( $params );
-		$info_pages = array_values( $result['query']['pages'] );
+		$res = $this->externalWikiService->fetch( $params );
+		if ( !$res->isOK() ) {
+			$this->error( "Cannot resolve! Unable to get page info for $conflictingPageID: " . $res->getValue() );
+			return null;
+		}
+		$info_pages = array_values( $res->getValue()['query']['pages'] );
 
 		# First call to resolveConflictingTitle won't enter here, but on further recursive calls
 		if ( isset( $info_pages[0]['missing'] ) ) {

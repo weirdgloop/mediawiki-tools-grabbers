@@ -22,7 +22,7 @@ use MediaWiki\User\UserIdentityValue;
 use MediaWiki\User\UserNameUtils;
 
 require_once __DIR__ . '/../../maintenance/Maintenance.php';
-require_once 'mediawikibot.class.php';
+require_once __DIR__ . '/ExternalWikiService.php';
 
 abstract class ExternalWikiGrabber extends Maintenance {
 
@@ -44,7 +44,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 */
 	protected IMaintainableDatabase $dbw;
 
-	protected MediaWikiBot $bot;
+	protected ExternalWikiService $externalWikiService;
 
 	protected ActorStore $actorStore;
 
@@ -93,36 +93,21 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$useragent = $this->getOption( 'useragent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36' );
 		$this->isFandom = (bool)preg_match( '/\.(fandom|wikia|gamepedia)\.com/',  $this->getOption( 'url', '' ) );
 
-		# bot class and log in if requested
+		$this->externalWikiService = new ExternalWikiService( $url, $useragent );
 		if ( $user && $password ) {
-			$this->bot = new MediaWikiBot(
-				$url,
-				'json',
-				$user,
-				$password,
-				$useragent,
-				$this->isFandom
-			);
 			if ( $this->isFandom ) {
-				$error = $this->bot->fandom_login();
+				$this->output( "Logging in to Fandom...\n" );
+				$loginRes = $this->externalWikiService->loginToFandom( $user, $password );
 			} else {
-				$error = $this->bot->login();
+				$this->output( "Logging in...\n" );
+				$loginRes = $this->externalWikiService->login( $user, $password );
 			}
-			if ( !$error ) {
+			if ( $loginRes->isOK() ) {
 				$this->output( "Logged in as $user...\n" );
 			} else {
 				$this->fatalError( sprintf( "Failed to log in as %s: %s",
-					$user, $error['login']['reason'] ) );
+					$user, $loginRes->getMessages()[0]->getKey() ) );
 			}
-		} else {
-			$this->bot = new MediaWikiBot(
-				$url,
-				'json',
-				'',
-				'',
-				$useragent,
-				$this->isFandom
-			);
 		}
 
 		# Get a single DB_PRIMARY connection
@@ -324,12 +309,12 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			return $oldname;
 		}
 
-		$params = [
+		$result = $this->externalWikiService->fetch( [
+			'action' => 'query',
 			'list' => 'users',
-			'ususerids' => $userid,
-		];
-		$result = $this->bot->query( $params );
-		if ( !isset( $result['query']['users'][0]['name'] ) ) {
+			'ususerids' => $userid
+		] );
+		if ( !$result->isOK() || !isset( $result->getValue()['query']['users'][0]['name'] ) ) {
 			$this->fatalError( "User ID $userid not found, is that a suppressed user now?" );
 		}
 
@@ -337,7 +322,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		MediaWikiServices::getInstance()->getUserFactory()->newFromUserIdentity( $user )->invalidateCache();
 		$this->actorStore->deleteUserIdentityFromCache( $user );
 
-		$newname = $result['query']['users'][0]['name'];
+		$newname = $result->getValue()['query']['users'][0]['name'];
 
 		$conflictingid = (int)$this->dbw->selectField(
 			'user',

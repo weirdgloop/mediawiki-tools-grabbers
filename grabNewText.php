@@ -102,10 +102,15 @@ class GrabNewText extends TextGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces list: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -175,6 +180,7 @@ class GrabNewText extends TextGrabber {
 
 		# Get edits
 		$params = [
+			'action' => 'query',
 			'list' => 'recentchanges',
 			'rcdir' => 'newer',
 			'rctype' => 'edit|new',
@@ -191,7 +197,11 @@ class GrabNewText extends TextGrabber {
 
 		$this->output( "Retrieving list of changed pages...\n" );
 		while ( $more ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch recent changes: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			if ( empty( $result['query']['recentchanges'] ) ) {
 				$this->output( 'No changes found...' );
 				break;
@@ -251,6 +261,7 @@ class GrabNewText extends TextGrabber {
 	 */
 	function processRecentLogs() {
 		$params = [
+			'action' => 'query',
 			'list' => 'logevents',
 			'ledir' => 'newer',
 			'lelimit' => 'max',
@@ -263,7 +274,11 @@ class GrabNewText extends TextGrabber {
 
 		$this->output( "Updating deleted and moved items...\n" );
 		while ( $more ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch log events: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			if ( empty( $result['query']['logevents'] ) ) {
 				$this->output( "No changes found...\n" );
 			} else {
@@ -415,6 +430,7 @@ class GrabNewText extends TextGrabber {
 		$this->output( "Processing page $pageDesignation...\n" );
 
 		$params = [
+			'action' => 'query',
 			'prop' => 'info|revisions',
 			'rvlimit' => 'max',
 			'rvprop' => 'ids|flags|timestamp|user|userid|comment|content|tags|contentmodel',
@@ -434,7 +450,11 @@ class GrabNewText extends TextGrabber {
 			$params['inprop'] = 'protection';
 		}
 
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Error getting page information from API for page $pageDesignation." );
+		}
+		$result = $req->getValue();
 
 		if ( !$result || isset( $result['error'] ) ) {
 			$this->fatalError( "Error getting revision information from API for page $pageDesignation." );
@@ -572,7 +592,11 @@ class GrabNewText extends TextGrabber {
 				break;
 			}
 
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Error getting page information from API for page $pageDesignation." );
+			}
+			$result = $req->getValue();
 			if ( !$result || isset( $result['error'] ) ) {
 				$this->fatalError( "Error getting revision information from API for page $pageDesignation." );
 				return;
@@ -671,6 +695,7 @@ class GrabNewText extends TextGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'prop' => 'deletedrevisions',
 			'titles' => (string)$pageTitle,
 			'drvprop' => 'ids|user|userid|comment|flags|content|tags|timestamp',
@@ -679,7 +704,11 @@ class GrabNewText extends TextGrabber {
 			'formatversion' => 2
 		];
 
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Error getting deleted revision information from API for page $pageTitle." );
+		}
+		$result = $req->getValue();
 
 		if ( !$result || isset( $result['error'] ) ) {
 			if ( isset( $result['error'] ) && $result['error']['code'] == 'permissiondenied' ) {
@@ -732,7 +761,11 @@ class GrabNewText extends TextGrabber {
 				break;
 			}
 
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Error getting deleted revision information from API for page $pageTitle." );
+			}
+			$result = $req->getValue();
 			if ( !$result || isset( $result['error'] ) ) {
 				$this->fatalError( "Error getting deleted revision information from API for page $pageTitle." );
 				return;
@@ -753,10 +786,15 @@ class GrabNewText extends TextGrabber {
 			# There's a local page at the given title
 			# Check if page exists on remote wiki
 			$params = [
+				'action' => 'query',
 				'prop' => 'info',
 				'pageids' => $pageID
 			];
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Error getting information from API for page ID $pageID" );
+			}
+			$result = $req->getValue();
 
 			if ( !$result || isset( $result['error'] ) ) {
 				$this->fatalError( "Error getting information from API for page ID $pageID" );
@@ -827,10 +865,15 @@ class GrabNewText extends TextGrabber {
 			# the move but we haven't processed it yet in recentchanges.
 			# Or it's under another title. See if title exists on remote wiki
 			$params = [
+				'action' => 'query',
 				'prop' => 'info',
 				'titles' => (string)$sourceTitle
 			];
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Error getting information from API for page $sourceTitle" );
+			}
+			$result = $req->getValue();
 
 			if ( !$result || isset( $result['error'] ) ) {
 				$this->fatalError( "Error getting information from API for page $sourceTitle" );

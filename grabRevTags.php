@@ -50,6 +50,7 @@ class GrabRevTags extends TextGrabber {
 		$arvcontinue = null;
 
 		$params = [
+			'action' => 'query',
 			'list' => 'allrevisions',
 			'arvlimit' => 'max',
 			'arvdir' => 'newer',
@@ -63,7 +64,11 @@ class GrabRevTags extends TextGrabber {
 				$params['arvcontinue'] = $arvcontinue;
 
 			}
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch revision list: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			$pageChunks = $result['query']['allrevisions'];
 			if ( empty( $pageChunks ) ) {

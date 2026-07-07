@@ -107,6 +107,7 @@ class GrabUserGroups extends ExternalWikiGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'list' => 'allusers',
 			'aulimit' => 'max',
 			'auprop' => 'groups',
@@ -116,7 +117,11 @@ class GrabUserGroups extends ExternalWikiGrabber {
 		$userCount = 0;
 
 		do {
-			$data = $this->bot->query( $params );
+			$res = $this->externalWikiService->fetch( $params );
+			if ( !$res->isOK() ) {
+				$this->fatalError( 'Error getting users from wiki: ' . $res->getMessages()[0] );
+			}
+			$data = $res->getValue();
 			$stuff = [];
 
 			foreach ( $data['query']['allusers'] as $user ) {
@@ -152,7 +157,11 @@ class GrabUserGroups extends ExternalWikiGrabber {
 			'meta' => 'siteinfo',
 			'siprop' => 'usergroups'
 		];
-		$data = $this->bot->query( $params );
+		$res = $this->externalWikiService->fetch( $params );
+		if ( !$res->isOK() ) {
+			$this->fatalError( 'Error getting user groups from wiki: ' . $res->getValue() );
+		}
+		$data = $res->getValue();
 		$groups = [];
 		foreach ( $data['query']['usergroups'] as $group ) {
 			if ( !in_array( $group['name'], $this->badGroups ) ) {

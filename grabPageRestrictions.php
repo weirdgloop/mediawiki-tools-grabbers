@@ -49,10 +49,15 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -87,6 +92,7 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 
 	public function processNamespace( $ns ) {
 		$params = [
+			'action' => 'query',
 			'generator' => 'allpages',
 			'gaplimit' => 'max',
 			'prop' => 'info',
@@ -99,7 +105,11 @@ class GrabPageRestrictions extends ExternalWikiGrabber {
 
 		$this->output( "Grabbing pages with restrictions for namespace $ns...\n" );
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch pages with restrictions: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( empty( $result['query']['pages'] ) ) {
 				return;

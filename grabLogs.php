@@ -49,6 +49,7 @@ class GrabLogs extends ExternalWikiGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'list' => 'logevents',
 			'lelimit' => 'max',
 			'ledir' => 'newer',
@@ -111,7 +112,11 @@ class GrabLogs extends ExternalWikiGrabber {
 
 		$this->output( "Fetching log events...\n" );
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch log events: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( empty( $result['query']['logevents'] ) ) {
 				$this->output( "No log events found...\n" );

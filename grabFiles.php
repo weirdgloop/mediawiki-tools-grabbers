@@ -44,6 +44,7 @@ class GrabFiles extends FileGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'generator' => 'allimages',
 			'gailimit' => 'max',
 			'prop' => 'imageinfo',
@@ -66,7 +67,11 @@ class GrabFiles extends FileGrabber {
 
 		$this->output( "Processing and downloading files...\n" );
 		while ( $more ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch file list: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			if ( empty( $result['query']['pages'] ) ) {
 				$this->fatalError( 'No files found...' );
 			}

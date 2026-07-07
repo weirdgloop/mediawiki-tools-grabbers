@@ -39,6 +39,7 @@ class GrabDeletedFiles extends FileGrabber {
 
 		if ( !$skipMetaData ) {
 			$params = [
+				'action' => 'query',
 				'list' => 'filearchive',
 				'falimit' => 'max',
 				'faprop' => 'sha1|timestamp|user|size|dimensions|description|mime|metadata|bitdepth'
@@ -53,7 +54,11 @@ class GrabDeletedFiles extends FileGrabber {
 
 			$this->output( "Processing file metadata...\n" );
 			while ( $more ) {
-				$result = $this->bot->query( $params );
+				$req = $this->externalWikiService->fetch( $params );
+				if ( !$req->isOK() ) {
+					$this->fatalError( "Unable to fetch deleted file list: {$req->getMessages()[0]->getKey()}" );
+				}
+				$result = $req->getValue();
 				if ( empty( $result['query']['filearchive'] ) ) {
 					$this->fatalError( 'No files found...' );
 				}
@@ -93,7 +98,11 @@ class GrabDeletedFiles extends FileGrabber {
 
 		if ( $scrape ) {
 			# Get the URL for this
-			$queryGeneral = $this->bot->query( [ 'meta' => 'siteinfo' ] )['query']['general'];
+			$queryGeneralReq = $this->externalWikiService->fetch( [ 'meta' => 'siteinfo' ] );
+			if ( !$queryGeneralReq->isOK() ) {
+				$this->fatalError( "Unable to fetch siteinfo: {$queryGeneralReq->getValue()}" );
+			}
+			$queryGeneral = $queryGeneralReq->getValue()['query']['general'];
 			$articlePath = $queryGeneral['articlepath'];
 			$serverURL = $queryGeneral['server'];
 		}
@@ -156,67 +165,64 @@ class GrabDeletedFiles extends FileGrabber {
 		global $wgUploadDirectory;
 
 		# $this->output( "\nRequesting undelete page: $undeletePage" );
-		$specialUndeletePage = $this->bot->curl_get( $undeletePage );
-
-		if ( $specialUndeletePage[0] ) {
-			$numMatches = preg_match_all(
-				'/<a href="([^"]+\?target=.*file=.*token=[a-zA-Z0-9%]*)"/',
-				$specialUndeletePage[1], $matches, PREG_SET_ORDER
-			);
-
-			if ( !$numMatches ) {
-				$this->output( "\nScraping: No target revisions for $fileName found.\n" );
-				file_put_contents( $wgUploadDirectory . '/lastfailedundeletepage.html', $specialUndeletePage[1] );
-
-				return false;
-			} else {
-				$fileContent = [ false, "$file: revision not found" ];
-
-				foreach ( $matches as $result ) {
-					$url = $result[1];
-
-					# The only thing we actually need to change in $url is to convert '&amp;'
-					# into actual ampersands. So let's do that.
-					$url = str_replace( '&amp;', '&', $url );
-
-					# Because the overall logic of this script doesn't actually expect this
-					# approach, we're actually just looking for the specific one...
-					if ( strpos( $url, urlencode( $file ) ) === false ) {
-						continue;
-					}
-
-					# Sometimes they randomly have the fullurl ?!
-					if ( substr( $url, 0, 1 ) == '/' ) {
-						$downloadTarget = $serverURL . $url;
-					} else {
-						$downloadTarget = $url;
-					}
-
-					# $this->output( "\nDownloading file content: $downloadTarget" );
-
-					$fileContent = $this->bot->curl_get( $downloadTarget );
-
-					# if ( !$fileContent[0] ) {
-					# 	$this->output( "$fileContent[1] for $downloadTarget\n" );
-					# }
-
-					break;
-				}
-				if ( !$fileContent[0] ) {
-					$this->output( "\n$fileContent[1]\n" );
-					return false;
-				} else {
-					# Errors handled; set to just actual content now
-					$fileContent = $fileContent[1];
-					# For debugging: quick visual check if it's even actually a file
-					$this->output( " (first four characters: " . substr( $fileContent, 0, 4 ) . ")" );
-
-					return $fileContent;
-				}
-			}
-		} else {
-			$this->output( "$specialUndeletePage[1]\n" );
+		$req = $this->externalWikiService->rawGet( $undeletePage );
+		if ( !$req->execute()->isOK() ) {
+			$this->output( "\nScraping: Unable to fetch undelete page: $undeletePage\n" );
 			return false;
+		}
+		$specialUndeletePage = $req->getContent();
+		$numMatches = preg_match_all(
+			'/<a href="([^"]+\?target=.*file=.*token=[a-zA-Z0-9%]*)"/',
+			$specialUndeletePage, $matches, PREG_SET_ORDER
+		);
+
+		if ( !$numMatches ) {
+			$this->output( "\nScraping: No target revisions for $fileName found.\n" );
+			file_put_contents( $wgUploadDirectory . '/lastfailedundeletepage.html', $specialUndeletePage );
+
+			return false;
+		} else {
+			$fileContent = [ false, "$file: revision not found" ];
+
+			foreach ( $matches as $result ) {
+				$url = $result[1];
+
+				# The only thing we actually need to change in $url is to convert '&amp;'
+				# into actual ampersands. So let's do that.
+				$url = str_replace( '&amp;', '&', $url );
+
+				# Because the overall logic of this script doesn't actually expect this
+				# approach, we're actually just looking for the specific one...
+				if ( strpos( $url, urlencode( $file ) ) === false ) {
+					continue;
+				}
+
+				# Sometimes they randomly have the fullurl ?!
+				if ( substr( $url, 0, 1 ) == '/' ) {
+					$downloadTarget = $serverURL . $url;
+				} else {
+					$downloadTarget = $url;
+				}
+
+				# $this->output( "\nDownloading file content: $downloadTarget" );
+
+				$req = $this->externalWikiService->rawGet( $downloadTarget );
+				if ( !$req->execute()->isOK() ) {
+					$this->output( "\nScraping: Unable to fetch undelete page download target: $downloadTarget\n" );
+					return false;
+				}
+				$fileContent = $req->getContent();
+
+				# if ( !$fileContent[0] ) {
+				# 	$this->output( "$fileContent[1] for $downloadTarget\n" );
+				# }
+
+				break;
+			}
+			# For debugging: quick visual check if it's even actually a file
+			$this->output( " (first four characters: " . substr( $fileContent, 0, 4 ) . ")" );
+
+			return $fileContent;
 		}
 	}
 

@@ -53,10 +53,15 @@ class GrabDeletedText extends TextGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -112,6 +117,7 @@ class GrabDeletedText extends TextGrabber {
 			$nsRevisions = 0;
 
 			$params = [
+				'action' => 'query',
 				'list' => 'alldeletedrevisions',
 				'adrnamespace' => $ns,
 				'adrlimit' => 'max',
@@ -126,7 +132,11 @@ class GrabDeletedText extends TextGrabber {
 					$params['adrcontinue'] = $adrcontinue;
 
 				}
-				$result = $this->bot->query( $params );
+				$req = $this->externalWikiService->fetch( $params );
+				if ( !$req->isOK() ) {
+					$this->fatalError( "Unable to fetch deleted revisions: {$req->getMessages()[0]->getKey()}" );
+				}
+				$result = $req->getValue();
 				if ( $result && isset( $result['error'] ) ) {
 					$this->fatalError( "User does not have required rights to fetch deleted revisions." );
 				}

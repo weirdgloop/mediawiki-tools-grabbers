@@ -40,10 +40,15 @@ class GrabInterwikiMap extends ExternalWikiGrabber {
 		$this->output( "Starting up...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'interwikimap'
 		];
-		$data = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch interwiki map: {$req->getMessages()[0]->getKey()}" );
+		}
+		$data = $req->getValue();
 
 		# No entries -> bail out early
 		if ( empty( $data['query']['interwikimap'] ) ) {

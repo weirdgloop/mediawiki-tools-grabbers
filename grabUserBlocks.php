@@ -53,6 +53,7 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'list' => 'blocks',
 			'bkdir' => 'newer',
 			'bkend' => $endDate,
@@ -69,7 +70,11 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 
 		$this->output( "Grabbing blocks...\n" );
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch block list: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( empty( $result['query']['blocks'] ) ) {
 				$this->output( "No blocks, hence nothing to do. Aborting the mission.\n" );

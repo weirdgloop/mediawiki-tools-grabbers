@@ -82,6 +82,7 @@ class GrabNewFiles extends FileGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'list' => 'logevents',
 			'leprop' => 'ids|title|type|timestamp|details|comment|user|userid',
 			'leend' => (string)$this->endDate,
@@ -95,7 +96,11 @@ class GrabNewFiles extends FileGrabber {
 
 		$this->output( "Processing and downloading changes from files...\n" );
 		while ( $more ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch log events: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			if ( empty( $result['query']['logevents'] ) ) {
 				$this->output( "No changes found...\n" );
 				break;
@@ -187,6 +192,7 @@ class GrabNewFiles extends FileGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'titles' => $title,
 			'prop' => 'imageinfo',
 			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|metadata|archivename|bitdepth|mediatype',
@@ -196,7 +202,11 @@ class GrabNewFiles extends FileGrabber {
 			# We don't care about continuation, it shouldn't be more than 2 files here
 			'iilimit' => 'max'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch file info for $title: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 
 		# Api always returns an entry for title
 		$page = array_values( $result['query']['pages'] )[0];
@@ -448,6 +458,7 @@ class GrabNewFiles extends FileGrabber {
 
 		$overwrittenArchiveName = null;
 		$params = [
+			'action' => 'query',
 			'titles' => $title,
 			'prop' => 'imageinfo',
 			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|metadata|archivename|bitdepth|mediatype',
@@ -459,7 +470,11 @@ class GrabNewFiles extends FileGrabber {
 		$count = 0;
 		while ( $more ) {
 			$params['iistart'] = $iistart;
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch file info for $title: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			# Api always returns an entry for title
 			$page = array_values( $result['query']['pages'] )[0];
 			if ( !isset( $page['imageinfo'] ) || empty( $page['imageinfo'] ) ) {
@@ -591,6 +606,7 @@ class GrabNewFiles extends FileGrabber {
 
 		$overwrittenArchiveName = null;
 		$params = [
+			'action' => 'query',
 			'titles' => $title,
 			'prop' => 'imageinfo',
 			'iiprop' => 'timestamp|user|userid|comment|url|size|sha1|mime|metadata|archivename|bitdepth|mediatype',
@@ -601,7 +617,11 @@ class GrabNewFiles extends FileGrabber {
 		$count = 0;
 		# NOTE: imageinfo returns revisions from newer to older
 		while ( $more ) {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch file info for $title: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			# Api always returns an entry for title
 			$page = array_values( $result['query']['pages'] )[0];
 			if ( !isset( $page['imageinfo'] ) || empty( $page['imageinfo'] ) ) {

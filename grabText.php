@@ -38,10 +38,15 @@ class GrabText extends TextGrabber {
 		$this->output( "Retrieving namespaces list...\n" );
 
 		$params = [
+			'action' => 'query',
 			'meta' => 'siteinfo',
 			'siprop' => 'namespaces|statistics'
 		];
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch namespaces: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 		$siteinfo = $result['query'];
 
 		# No data - bail out early
@@ -118,6 +123,7 @@ class GrabText extends TextGrabber {
 		$nsPageCount = 0;
 		$more = true;
 		$params = [
+			'action' => 'query',
 			'generator' => 'allpages',
 			'gaplimit' => 'max',
 			'prop' => 'info',
@@ -128,7 +134,11 @@ class GrabText extends TextGrabber {
 			$params['gapfrom'] = $continueTitle;
 		}
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch pages: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			# Skip empty namespaces
 			if ( isset( $result['query'] ) ) {
@@ -181,6 +191,7 @@ class GrabText extends TextGrabber {
 		$this->output( "Processing page id $pageID...\n" );
 
 		$params = [
+			'action' => 'query',
 			'prop' => 'info|revisions',
 			'rvlimit' => 'max',
 			'rvprop' => 'ids|flags|timestamp|user|userid|comment|content|tags|contentmodel',
@@ -189,7 +200,11 @@ class GrabText extends TextGrabber {
 		];
 		$params['pageids'] = $pageID;
 
-		$result = $this->bot->query( $params );
+		$req = $this->externalWikiService->fetch( $params );
+		if ( !$req->isOK() ) {
+			$this->fatalError( "Unable to fetch revisions for page id $pageID: {$req->getMessages()[0]->getKey()}" );
+		}
+		$result = $req->getValue();
 
 		if ( !$result || isset( $result['error'] ) ) {
 			$this->fatalError( "Error getting revision information from API for page id $pageID." );
@@ -306,7 +321,11 @@ class GrabText extends TextGrabber {
 				break;
 			}
 
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch revisions for page id $pageID: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 			if ( !$result || isset( $result['error'] ) ) {
 				$this->fatalError( "Error getting revision information from API for page id $pageID." );
 				return;

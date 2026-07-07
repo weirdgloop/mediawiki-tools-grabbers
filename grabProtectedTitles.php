@@ -50,6 +50,7 @@ class GrabProtectedTitles extends ExternalWikiGrabber {
 		}
 
 		$params = [
+			'action' => 'query',
 			'list' => 'protectedtitles',
 			'ptdir' => 'newer',
 			'ptend' => $endDate,
@@ -66,7 +67,11 @@ class GrabProtectedTitles extends ExternalWikiGrabber {
 
 		$this->output( "Grabbing protected titles...\n" );
 		do {
-			$result = $this->bot->query( $params );
+			$req = $this->externalWikiService->fetch( $params );
+			if ( !$req->isOK() ) {
+				$this->fatalError( "Unable to fetch protected titles: {$req->getMessages()[0]->getKey()}" );
+			}
+			$result = $req->getValue();
 
 			if ( empty( $result['query']['protectedtitles'] ) ) {
 				$this->output( "No protected titles, hence nothing to do. Aborting the mission.\n" );
