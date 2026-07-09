@@ -95,6 +95,8 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 
 		# Print namespaceAliases if any
 		if ( count( $namespaceAliases ) > 2 ) {
+			// WGL - Sort namespace aliases in ascending numeric order like other namespace options.
+			asort( $namespaceAliases, SORT_NUMERIC );
 			$this->output( "\n# Namespace aliases\n" );
 			foreach ( array_keys( $namespaceAliases ) as $nsa ) {
 				# Ignore if image/image talk; that's core
