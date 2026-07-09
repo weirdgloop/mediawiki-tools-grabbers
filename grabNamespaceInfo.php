@@ -14,6 +14,9 @@ require_once 'includes/ExternalWikiGrabber.php';
 
 # Custom namespaces - make a list as these will need to be added to the localsettings/whatever
 class GrabNamespaceInfo extends ExternalWikiGrabber {
+	// WGL - Avoid redundant Scribunto namespace configuration.
+	private array $knownExtensionNamespaces = [ 828, 829 ];
+
 	public function __construct() {
 		parent::__construct();
 		$this->addDescription( 'Get namespace info from a source wiki to add to your LocalSettings.php' );
@@ -21,6 +24,8 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 
 	public function execute() {
 		parent::execute();
+		$contLang = $this->getServiceContainer()->getContentLanguage();
+		$knownAliases = $contLang->getNamespaceAliases();
 
 		$this->output( "\n" );
 
@@ -52,7 +57,8 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 			if ( isset( $namespaces[$ns]['subpages'] ) ) {
 				$subpageNamespaces[] = $ns;
 			}
-			if ( $ns >= 100 ) {
+			// WGL - Avoid redundant extension namespace configuration.
+			if ( !in_array( $ns, $this->knownExtensionNamespaces ) ) {
 				$customNamespaces[$ns] = $namespaces[$ns]['*'];
 				# Wikis in languages other than English where the namespaces are
 				# provided by extensions, have localized namespace in *, use it as
@@ -63,7 +69,12 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 			}
 		}
 		foreach ( $result['query']['namespacealiases'] as $nsa ) {
-			$namespaceAliases[$nsa['*']] = $nsa['id'];
+			// WGL - Avoid redundant extension namespace configuration.
+			if ( !in_array( $nsa['id'], $this->knownExtensionNamespaces ) ||
+			     !array_key_exists( $nsa['*'], $knownAliases )
+			) {
+				$namespaceAliases[$nsa['*']] = $nsa['id'];
+			}
 		}
 
 		# Show stuff
