@@ -26,6 +26,7 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 		parent::execute();
 		$contLang = $this->getServiceContainer()->getContentLanguage();
 		$knownAliases = $contLang->getNamespaceAliases();
+		$nsInfo = $this->getServiceContainer()->getNamespaceInfo();
 
 		$this->output( "\n" );
 
@@ -57,8 +58,8 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 			if ( isset( $namespaces[$ns]['subpages'] ) ) {
 				$subpageNamespaces[] = $ns;
 			}
-			// WGL - Avoid redundant extension namespace configuration.
-			if ( !in_array( $ns, $this->knownExtensionNamespaces ) ) {
+			// WGL - Avoid redundant namespace configuration.
+			if ( !in_array( $ns, $nsInfo->getCommonNamespaces() ) && !in_array( $ns, $this->knownExtensionNamespaces ) ) {
 				$customNamespaces[$ns] = $namespaces[$ns]['*'];
 				# Wikis in languages other than English where the namespaces are
 				# provided by extensions, have localized namespace in *, use it as
@@ -69,9 +70,9 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 			}
 		}
 		foreach ( $result['query']['namespacealiases'] as $nsa ) {
-			// WGL - Avoid redundant extension namespace configuration.
-			if ( !in_array( $nsa['id'], $this->knownExtensionNamespaces ) ||
-			     !array_key_exists( $nsa['*'], $knownAliases )
+			// WGL - Avoid redundant namespace configuration.
+			if ( ( !in_array( $nsa['id'], $nsInfo->getCommonNamespaces() ) && !in_array( $nsa['id'], $this->knownExtensionNamespaces ) ) ||
+			     !array_key_exists( strtr( $nsa['*'], ' ', '_' ), $knownAliases )
 			) {
 				$namespaceAliases[$nsa['*']] = $nsa['id'];
 			}
@@ -105,15 +106,12 @@ class GrabNamespaceInfo extends ExternalWikiGrabber {
 		# TO IMPLEMENT; currently the common default configuration just assumes all of them
 
 		# Print namespaceAliases if any
-		if ( count( $namespaceAliases ) > 2 ) {
+		if ( $namespaceAliases ) {
 			// WGL - Sort namespace aliases in ascending numeric order like other namespace options.
 			asort( $namespaceAliases, SORT_NUMERIC );
 			$this->output( "\n# Namespace aliases\n" );
 			foreach ( array_keys( $namespaceAliases ) as $nsa ) {
-				# Ignore if image/image talk; that's core
-				if ( $namespaceAliases[$nsa] != 6 && $namespaceAliases[$nsa] != 7 ) {
-					$this->output( '$wgNamespaceAliases["' . $nsa . '"] = ' . $namespaceAliases[$nsa] . ';' . "\n" );
-				}
+				$this->output( '$wgNamespaceAliases["' . $nsa . '"] = ' . $namespaceAliases[$nsa] . ';' . "\n" );
 			}
 		}
 
