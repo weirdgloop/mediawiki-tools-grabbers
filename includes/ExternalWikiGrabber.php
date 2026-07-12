@@ -75,7 +75,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		$this->addOption( 'db', 'Database name, if we don\'t want to write to $wgDBname', false, true );
 
 		// WGL added options
-		$this->addOption( 'platform', 'External platform name to use for GUM if not autodetected, e.g. "fandom" or "wikigg"', false, true );
+		$this->addOption( 'platform', 'External platform name to use for GUM (WG-only extension) if not autodetected, e.g. "fandom" or "wikigg"', false, true );
 		$this->addOption( 'useragent', 'User agent to use on the target wiki', false, true );
 		$this->addOption( 'actor-conflict-suffix', 'Suffix to use when a user\'s name conflicts, such as "fandom"', false, true );
 	}
@@ -205,76 +205,114 @@ abstract class ExternalWikiGrabber extends Maintenance {
 		// User creation and lookup only applies to remote registered users.
 		if ( $remoteId ) {
 			if ( $this->platform ) {
-				// Use the invalid user id 0 for missing user entries.
-				$id = (int)$this->dbw->selectField(
+				return $this->getUserIdentityGum( $remoteId, $name );
+			}
+
+			// If a user (mapping) exists, check if renaming is needed.
+			$name = $this->userMappings[$remoteId] ?? $name;
+			$userIdentity = $this->actorStore->getUserIdentityByUserId( $remoteId );
+			if ( $userIdentity ) {
+				if ( $userIdentity->getName() !== $name ) {
+					$oldname = $userIdentity->getName();
+					# Cache the new user name for uncompleted user rename.
+					$this->userMappings[$remoteId] = $name = $this->getAndUpdateUserName( $userIdentity );
+					if ( $oldname !== $name ) {
+						$this->output( "Notice: We encountered a user rename on ID $remoteId, $oldname => $name\n" );
+					}
+				}
+				return $userIdentity;
+			} else {
+				// User does not exist by ID
+				$userIdentity = $this->actorStore->getUserIdentityByName( $name );
+				if ( $userIdentity ) {
+					$suffix = $this->getOption( 'actor-conflict-suffix', '@conflict' );
+					$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $remoteId instead.\n" );
+					$this->userMappings[$remoteId] = $name = $name . $suffix;
+				}
+			}
+		}
+
+		$userIdentity = new UserIdentityValue( $remoteId, $name );
+		$this->actorStore->acquireActorId( $userIdentity, $this->dbw );
+		return $userIdentity;
+	}
+
+	/**
+	 * Get user identity using Weird Gloop's GUM extension. This extension is not used by 3rd party wikis.
+	 *
+	 * @param int $remoteId User id, or 0
+	 * @param string $name User name or IP address
+	 */
+	private function getUserIdentityGum( $remoteId, $name ) {
+		// Use the invalid user id 0 for missing user entries.
+		$id = (int)$this->dbw->selectField(
+			'gum_user_platforms',
+			'gup_user',
+			[
+				'gup_platform' => $this->platform,
+				'gup_remote_id' => $remoteId,
+			],
+			__METHOD__
+		);
+
+		if ( $id !== 0 ) {
+			// User exists in GUM table, so they should have an actor table entry at this point.
+			$name = $this->userMappings[$id] ?? $name;
+			$userIdentity = $this->actorStore->getUserIdentityByUserId( $id );
+			if ( $userIdentity ) {
+				if ( $userIdentity->getName() !== $name ) {
+					$oldname = $userIdentity->getName();
+					# Cache the new user name for uncompleted user rename.
+					$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
+					if ( $oldname !== $name ) {
+						$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
+					}
+				}
+				return $userIdentity;
+			} else {
+				// TODO: How to handle? Should we create the user table entry like populateUserTable?
+				$this->error( "Desync: User '$name' ($id) found in GUM, but not user table." );
+			}
+		}
+		// User does not exist in the GUM table, so we've probably never seen them before and need to create them.
+
+		$user = $this->userFactory->newFromName( $name );
+		if ( !$user ) {
+			// If user creation failed, then the name is invalid, so treat the result as an imported user.
+			$name = "imported>$name";
+			$remoteId = 0;
+		} else {
+			if ( $user->isRegistered() ) {
+				// If user exists, but GUM didn't know about it, then we have a name conflict.
+				$suffix = '@' . $this->getOption( 'actor-conflict-suffix', $this->platform ?: 'conflict' );
+				$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $id instead.\n" );
+				$name = $name . $suffix;
+				$user = $this->userFactory->newFromName( $name );
+				// Needed here so that the in-process user mapping has the correct user ID.
+				$user->addToDatabase();
+				$id = $user->getId();
+				if ( $id !== 0 ) {
+					$this->userMappings[$id] = $name;
+				}
+			} else {
+				// New user - add them to the database
+				$user->addToDatabase();
+			}
+
+			$id = $user->getId();
+			if ( $id !== 0 ) {
+				// As long as we created a user with a valid ID (not anonymous), then add them to the GUM table
+				$this->dbw->insert(
 					'gum_user_platforms',
-					'gup_user',
 					[
+						'gup_user' => $id,
 						'gup_platform' => $this->platform,
 						'gup_remote_id' => $remoteId,
 					],
 					__METHOD__
 				);
-			} else {
-				$id = $remoteId;
 			}
-
-			// If a user (mapping) exists, check if renaming is needed.
-			if ( $id !== 0 ) {
-				$name = $this->userMappings[$id] ?? $name;
-				$userIdentity = $this->actorStore->getUserIdentityByUserId( $id );
-				if ( $userIdentity ) {
-					if ( $userIdentity->getName() !== $name ) {
-						$oldname = $userIdentity->getName();
-						# Cache the new user name for uncompleted user rename.
-						$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
-						if ( $oldname !== $name ) {
-							$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
-						}
-					}
-					return $userIdentity;
-				} elseif ( $this->platform ) {
-					// TODO: How to handle? Should we create the user table entry like populateUserTable?
-					$this->error( "Desync: User '$name' ($id) found in GUM, but not user table." );
-				}
-			}
-
-			$user = $this->userFactory->newFromName( $name );
-			// If user creation failed, then the name is invalid, so treat the result as an imported user.
-			if ( !$user ) {
-				$name = "imported>$name";
-				$remoteId = 0;
-			} else {
-				// If user exists, but GUM doesn't know about it, then we have a name conflict.
-				if ( $user->isRegistered() ) {
-					$suffix = '@' . $this->getOption( 'actor-conflict-suffix', $this->platform ?: 'conflict' );
-					$this->output( "Notice: The user name $name is already in use, using $name$suffix for ID $id instead.\n" );
-					$name = $name . $suffix;
-					$user = $this->userFactory->newFromName( $name );
-					// Needed here so that the in-process user mapping has the correct user ID.
-					$user->addToDatabase();
-					$id = $user->getId();
-					if ( $id !== 0 ) {
-						$this->userMappings[$id] = $name;
-					}
-				} else {
-					$user->addToDatabase();
-				}
-
-				$id = $user->getId();
-				if ( $this->platform && $id !== 0 ) {
-					$this->dbw->insert(
-						'gum_user_platforms',
-						[
-							'gup_user' => $id,
-							'gup_platform' => $this->platform,
-							'gup_remote_id' => $remoteId,
-						],
-						__METHOD__
-					);
-				}
-				return $user;
-			}
+			return $user;
 		}
 
 		$userIdentity = new UserIdentityValue( $remoteId, $name );
