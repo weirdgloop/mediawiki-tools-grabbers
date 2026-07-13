@@ -180,7 +180,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * @param int $remoteId User id, or 0
 	 * @param string $name User name or IP address
 	 */
-	function getUserIdentity( $remoteId, $name ) {
+	function getUserIdentity( $remoteId, $name ): UserIdentity|UserIdentityValue {
 		if ( empty( $name ) ) {
 			return $this->actorStore->getUnknownActor();
 		}
@@ -243,7 +243,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * @param int $remoteId User id, or 0
 	 * @param string $name User name or IP address
 	 */
-	private function getUserIdentityGum( $remoteId, $name ) {
+	private function getUserIdentityGum( $remoteId, $name ): UserIdentity|UserIdentityValue {
 		// Use the invalid user id 0 for missing user entries.
 		$id = (int)$this->dbw->selectField(
 			'gum_user_platforms',

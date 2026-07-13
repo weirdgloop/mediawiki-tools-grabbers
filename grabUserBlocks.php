@@ -111,18 +111,22 @@ class GrabUserBlocks extends ExternalWikiGrabber {
 		$commentStore = MediaWikiServices::getInstance()->getCommentStore();
 		$commentFields = $commentStore->insert( $this->dbw, 'bl_reason', $entry['reason'] );
 
-		$isUser = $entry['userid'] !== 0;
+		$userIdentity = $this->getUserIdentity( $entry['userid'], $entry['user'] );
+		$userId = $userIdentity->getId();
+		$userName = $userIdentity->getName();
+		$isUser = $userIdentity->isRegistered();
+
 		$ipHex = null;
 		if ( isset( $entry['rangestart'] ) ) {
 			$ipHex = $entry['rangestart'];
 		} elseif ( !$isUser ) {
-			$ipHex = IPUtils::toHex( $entry['user'] );
+			$ipHex = IPUtils::toHex( $userName );
 		}
 
 		$targetData = [
-			'bt_address' => $isUser ? null : $entry['user'],
-			'bt_user' => $isUser ? $entry['userid'] : null,
-			'bt_user_text' => $isUser ? $entry['user'] : null,
+			'bt_address' => $isUser ? null : $userName,
+			'bt_user' => $isUser ? $userId : null,
+			'bt_user_text' => $isUser ? $userName : null,
 			'bt_auto' => 0,
 			'bt_range_start' => $entry['rangestart'] ?? null,
 			'bt_range_end' => $entry['rangeend'] ?? null,
