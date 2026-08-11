@@ -104,6 +104,18 @@ class ExternalWikiService {
 		if ( !$req->execute()->isOK() || $req->getStatus() !== 200 ) {
 			return $status->fatal( "Could not login, status code {$req->getStatus()}" );
 		}
+
+		// This is extremely dumb but includes/libs/Cookie.php expects cookies that are shared on a domain to start
+		// with a period (RFC 2109), and Fandom returns the cookie on "fandom.com" instead of ".fandom.com" (RFC 6265).
+		// So we'll hack around it by replacing the domain in the cookie string and parsing the cookies again...
+		$cookies = $req->getResponseHeaders()['set-cookie'];
+		if ( isset( $cookies ) ) {
+			foreach ( $cookies as $cookie ) {
+				$cookie = str_replace( 'Domain=fandom.com', 'Domain=.fandom.com', $cookie );
+				$this->cookieJar->parseCookieResponseHeader( $cookie, 'services.fandom.com' );
+			}
+		}
+
 		return $status;
 	}
 
