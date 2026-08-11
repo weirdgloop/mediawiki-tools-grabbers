@@ -263,7 +263,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				if ( $userIdentity->getName() !== $name ) {
 					$oldname = $userIdentity->getName();
 					# Cache the new user name for uncompleted user rename.
-					$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity );
+					$this->userMappings[$id] = $name = $this->getAndUpdateUserName( $userIdentity, $remoteId );
 					if ( $oldname !== $name ) {
 						$this->output( "Notice: We encountered a user rename on ID $id, $oldname => $name\n" );
 					}
@@ -326,34 +326,36 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 * and update our database.
 	 *
 	 * @param UserIdentity $user
+	 * @param int|null $remoteId
 	 * @return string The new user name
 	 */
-	private function getAndUpdateUserName( UserIdentity $user ) {
+	private function getAndUpdateUserName( UserIdentity $user, int $remoteId = null ) {
 		$oldname = $user->getName();
-		$userid = $user->getId();
+		$localUserId = $user->getId();
+		$remoteUserId = $remoteId ?? $localUserId;
 
 		// Don't rename users who have already migrated.
 		$usermigrated = $this->dbw->selectField(
 			'user',
 			'1',
 			[
-				'user_id' => $userid,
+				'user_id' => $localUserId,
 				"user_password != ''",
 			],
 			__METHOD__
 		);
 		if ( $usermigrated ) {
-			$this->output( "Notice: User ID $userid already migrated, keeping user name as $oldname.\n" );
+			$this->output( "Notice: User ID $localUserId already migrated, keeping user name as $oldname.\n" );
 			return $oldname;
 		}
 
 		$result = $this->externalWikiService->fetch( [
 			'action' => 'query',
 			'list' => 'users',
-			'ususerids' => $userid
+			'ususerids' => $remoteUserId
 		] );
 		if ( !$result->isOK() || !isset( $result->getValue()['query']['users'][0]['name'] ) ) {
-			$this->fatalError( "User ID $userid not found, is that a suppressed user now?" );
+			$this->fatalError( "User ID $remoteUserId not found on remote wiki, is that a suppressed user now?" );
 		}
 
 		# Clear all related cache
@@ -370,21 +372,21 @@ abstract class ExternalWikiGrabber extends Maintenance {
 			],
 			__METHOD__
 		);
-		if ( $conflictingid && $conflictingid !== $userid ) {
-			$this->output( "Notice: User name $newname is already in use by ID $conflictingid, keeping user name $oldname for $userid\n" );
+		if ( $conflictingid && $conflictingid !== $localUserId ) {
+			$this->output( "Notice: User name $newname is already in use by ID $conflictingid, keeping user name $oldname for $localUserId\n" );
 			return $oldname;
 		}
 		# Adapt from RenameuserSQL::rename(), do we need other parts?
 		$this->dbw->update(
 			'user',
 			[ 'user_name' => $newname, 'user_touched' => $this->dbw->timestamp() ],
-			[ 'user_id' => $userid ],
+			[ 'user_id' => $localUserId ],
 			__METHOD__
 		);
 		$this->dbw->update(
 			'actor',
 			[ 'actor_name' => $newname ],
-			[ 'actor_user' => $userid ],
+			[ 'actor_user' => $localUserId ],
 			__METHOD__
 		);
 
