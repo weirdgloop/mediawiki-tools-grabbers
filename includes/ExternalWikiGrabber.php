@@ -65,7 +65,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	 */
 	protected array $userMappings = [];
 
-	private string $platform = '';
+	protected string $platform = '';
 
 	public function __construct() {
 		parent::__construct();
