@@ -14,6 +14,8 @@ require_once 'includes/TextGrabber.php';
 
 class GrabRevisions extends TextGrabber {
 
+	protected ?array $pageIdFilter = null;
+
 	public function __construct() {
 		parent::__construct();
 		$this->addDescription( "Grab revisions from an external wiki and import it into one of ours.\n" .
@@ -24,10 +26,15 @@ class GrabRevisions extends TextGrabber {
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
 		$this->addOption( 'refreshlinks', 'Create refreshLinks jobs for changed pages.' );
 		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
+		$this->addArg( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false );
 	}
 
 	public function execute() {
 		parent::execute();
+
+		if ( $this->hasArg( 0 ) ) {
+			$this->pageIdFilter = $this->readPageIdListFile( $this->getArg( 0 ) );
+		}
 
 		$this->output( "\n" );
 
@@ -247,6 +254,9 @@ class GrabRevisions extends TextGrabber {
 			$result = $req->getValue();
 
 			$pages = $result['query']['allrevisions'];
+			if ( $this->pageIdFilter !== null ) {
+				$pages = array_filter( $pages, fn ( $page ) => in_array( (int)$page['pageid'], $this->pageIdFilter, true ) );
+			}
 			// Deal with miser mode
 			if ( $pages ) {
 				$misserModeCount = $resultsCount = 0;
