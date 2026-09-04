@@ -28,7 +28,7 @@ class GrabFiles extends FileGrabber {
 		$this->addOption( 'from', 'Name of file to start from', false, true );
 		$this->addOption( 'to', 'Name of file to end at', false, true );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
-		$this->addArg( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false );
+		$this->addOption( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false, true );
 
 		$this->setBatchSize( 10 );
 	}
@@ -36,8 +36,8 @@ class GrabFiles extends FileGrabber {
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasArg( 0 ) ) {
-			$this->pageIdFilter = $this->readPageIdListFile( $this->getArg( 0 ) );
+		if ( $this->getOption( 'listfile' ) !== null ) {
+			$this->pageIdFilter = $this->readPageIdListFile( $this->getOption( 'listfile' ) );
 		}
 
 		$this->endDate = $this->getOption( 'enddate' );

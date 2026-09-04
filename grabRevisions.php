@@ -26,14 +26,14 @@ class GrabRevisions extends TextGrabber {
 		$this->addOption( 'namespaces', 'Pipe-separated namespaces (ID) to grab. Defaults to all namespaces', false, true );
 		$this->addOption( 'refreshlinks', 'Create refreshLinks jobs for changed pages.' );
 		$this->addOption( 'skip-fandom-comments', 'Skip any pages that are Fandom comment pages (@comment-*)' );
-		$this->addArg( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false );
+		$this->addOption( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false, true );
 	}
 
 	public function execute() {
 		parent::execute();
 
-		if ( $this->hasArg( 0 ) ) {
-			$this->pageIdFilter = $this->readPageIdListFile( $this->getArg( 0 ) );
+		if ( $this->getOption( 'listfile' ) !== null ) {
+			$this->pageIdFilter = $this->readPageIdListFile( $this->getOption( 'listfile' ) );
 		}
 
 		$this->output( "\n" );
