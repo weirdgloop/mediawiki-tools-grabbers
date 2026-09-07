@@ -18,6 +18,8 @@ class GrabFiles extends FileGrabber {
 
 	protected ?string $endDate;
 
+	protected ?array $pageIdFilter = null;
+
 	public function __construct() {
 		parent::__construct();
 		$this->addDescription(
@@ -26,12 +28,17 @@ class GrabFiles extends FileGrabber {
 		$this->addOption( 'from', 'Name of file to start from', false, true );
 		$this->addOption( 'to', 'Name of file to end at', false, true );
 		$this->addOption( 'enddate', 'Date after which to ignore new files (20121222142317, 2012-12-22T14:23:17Z, etc)', false, true );
+		$this->addOption( 'listfile', 'File with page IDs to restrict grabbing to, separated by newlines', false, true );
 
 		$this->setBatchSize( 10 );
 	}
 
 	public function execute() {
 		parent::execute();
+
+		if ( $this->getOption( 'listfile' ) !== null ) {
+			$this->pageIdFilter = $this->readPageIdListFile( $this->getOption( 'listfile' ) );
+		}
 
 		$this->endDate = $this->getOption( 'enddate' );
 		if ( $this->endDate ) {
@@ -76,7 +83,12 @@ class GrabFiles extends FileGrabber {
 				$this->fatalError( 'No files found...' );
 			}
 
-			$files = array_merge( ...array_map( $this->flattenFileEntry( ... ), $result['query']['pages'] ) );
+			$pages = $result['query']['pages'];
+			if ( $this->pageIdFilter !== null ) {
+				$pages = array_filter( $pages, fn ( $page ) => in_array( (int)$page['pageid'], $this->pageIdFilter, true ) );
+			}
+
+			$files = $pages ? array_merge( ...array_map( $this->flattenFileEntry( ... ), $pages ) ) : [];
 
 			foreach ( array_chunk( $files, $this->getBatchSize() ) as $batch ) {
 				$newFiles = array_filter( $batch, static fn ( $file ) => !$file['old'] );

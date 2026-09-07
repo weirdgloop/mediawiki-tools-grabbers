@@ -406,6 +406,20 @@ abstract class ExternalWikiGrabber extends Maintenance {
 	}
 
 	/**
+	 * Reads a list of page IDs from a file, one per line.
+	 *
+	 * @param string $path Path to the file
+	 * @return int[] Page IDs
+	 */
+	function readPageIdListFile( string $path ): array {
+		$lines = file( $path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+		if ( $lines === false ) {
+			$this->fatalError( "Unable to read page ID list file: $path" );
+		}
+		return array_map( 'intval', array_map( 'trim', $lines ) );
+	}
+
+	/**
 	 * Adds tags for a given revision, log, etc.
 	 * This method mimicks what ChangeTags::updateTags() does, and the code
 	 * is largely copied from there, removing unnecessary bits.
