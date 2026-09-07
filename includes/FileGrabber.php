@@ -683,8 +683,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 		$streams = [];
 		$results = [];
 		$requests = [];
-		$fileOptionsByUrl = [];
-		foreach ( $files as $options ) {
+		foreach ( $files as $i => $options ) {
 			$url = $options['fileUrl'];
 			if ( $enableCacheBuster ) {
 				$time = time();
@@ -709,7 +708,7 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 			}
 
 			$streams[] = $stream;
-			$requests[] = [
+			$requests[$i] = [
 				'method' => 'GET',
 				'url' => $url,
 				'stream' => $stream,
@@ -717,13 +716,12 @@ abstract class FileGrabber extends ExternalWikiGrabber {
 					'Accept' => $this->getRelevantAcceptHeader( $options['relatedFileName'] ),
 				],
 			];
-			$fileOptionsByUrl[$url] = $options;
 		}
 
 		$responses = $client->runMulti( $requests );
 
-		foreach ( $responses as $response ) {
-			$options = $fileOptionsByUrl[$response['url']];
+		foreach ( $responses as $i => $response ) {
+			$options = $files[$i];
 			$fileUrl = $options['fileUrl'];
 			$status = StatusValue::newGood( $options['targetTempFile'] );
 
