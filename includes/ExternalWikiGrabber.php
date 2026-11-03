@@ -85,7 +85,7 @@ abstract class ExternalWikiGrabber extends Maintenance {
 
 		$url = $this->getOption( 'url' );
 		if ( !$url ) {
-			$this->error( 'The URL to the target wiki\'s api.php is required.', 1 );
+			$this->fatalError( 'The URL to the target wiki\'s api.php is required.' );
 		}
 
 		$user = $this->getOption( 'username' );
@@ -131,10 +131,10 @@ abstract class ExternalWikiGrabber extends Maintenance {
 				$this->platform = 'wikigg';
 				$this->output( "Autodetected external platform is 'wikigg'.\n" );
 			} else {
-				$this->error( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.', 1 );
+				$this->fatalError( 'The "GUM" extension is loaded and the external platform could not be autodetected. Please pass "--platform=<name>" to continue.' );
 			}
 			if ( !array_key_exists( $this->platform, $this->getConfig()->get( 'GumRemotePlatformsConfig' ) ) ) {
-				$this->error( "The 'GUM' extension is loaded and the passed external platform '$this->platform' is unknown.", 1 );
+				$this->fatalError( "The 'GUM' extension is loaded and the passed external platform '$this->platform' is unknown." );
 			}
 		}
 	}
