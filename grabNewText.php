@@ -966,7 +966,7 @@ class GrabNewText extends TextGrabber {
 			$this->dbw->delete( 'redirect', [ 'rd_from' => $id ], __METHOD__ );
 			$fieldValue = 0;
 		} else {
-			$page->insertRedirectEntry( $rt );
+			MediaWikiServices::getInstance()->getRedirectStore()->updateRedirectTarget( $page, $rt );
 			$fieldValue = 1;
 		}
 
